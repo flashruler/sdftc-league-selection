@@ -2,7 +2,8 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
 import { VenueDetailsCard } from "./components/VenueDetailsCard";
 import { CsvTable, ExportCsvButton } from "./components/CsvExports";
@@ -14,6 +15,8 @@ export default function AdminPageClient() {
   const timeSlots = useQuery(api.timeSlots.getAvailable);
   const venues = useQuery(api.venues.get);
   const setVenueDetails = useMutation(api.venues.setDetails);
+  const createTimeSlot = useMutation(api.timeSlots.create);
+  const setTimeSlotActive = useMutation(api.timeSlots.setActive);
 
   // Per-venue UX state
   const [savingByVenue, setSavingByVenue] = useState<Record<string, boolean>>({});
@@ -166,6 +169,65 @@ export default function AdminPageClient() {
                 ),
               },
               {
+                id: "events",
+                label: "Events",
+                content: (
+                  <div>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-semibold text-slate-900">Manage Events</h2>
+                        <p className="text-slate-600">Add new time slots and toggle availability</p>
+                      </div>
+                    </div>
+
+                    <AddEventForm venues={venues} onCreate={async (payload) => {
+                      await createTimeSlot(payload);
+                      router.refresh();
+                    }} />
+
+                    <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {venues?.map((v) => {
+                        const slotsForVenue = (timeSlots ?? []).filter((s) => s.venueId === v._id);
+                        return (
+                          <div key={String(v._id)} className="bg-white border border-slate-200 rounded-xl p-4">
+                            <div className="font-semibold text-slate-900 mb-3">{v.name}</div>
+                            {slotsForVenue.length === 0 ? (
+                              <div className="text-sm text-slate-500">No active time slots.</div>
+                            ) : (
+                              <ul className="space-y-2">
+                                {slotsForVenue.map((s) => (
+                                  <li key={String(s._id)} className="flex items-center justify-between text-sm">
+                                    <div className="text-slate-700">
+                                      <span className="font-medium">{s.day}</span>
+                                      {s.date ? <span className="text-slate-500"> · {s.date}</span> : null}
+                                      <span className="text-slate-500"> · cap {s.capacity}</span>
+                                    </div>
+                                    <button
+                                      onClick={async () => {
+                                        await setTimeSlotActive({ id: s._id, isActive: !s.isActive });
+                                        router.refresh();
+                                      }}
+                                      className={`px-2 py-1 rounded-md border text-xs ${s.isActive ? "border-red-300 text-red-700 hover:bg-red-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
+                                    >
+                                      {s.isActive ? "Deactivate" : "Activate"}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ),
+              },
+              {
                 id: "registrations",
                 label: "Registrations",
                 content: (
@@ -194,5 +256,109 @@ export default function AdminPageClient() {
         </div>
       </div>
     </main>
+  );
+}
+
+type VenueOption = { _id: string; name: string; type: string };
+
+function AddEventForm({
+  venues,
+  onCreate,
+}: {
+  venues: Array<VenueOption> | undefined;
+  onCreate: (payload: { venueId: Id<"venues">; day: string; date?: string; capacity: number }) => Promise<void>;
+}) {
+  const [venueId, setVenueId] = useState<string>("");
+  const [day, setDay] = useState("Day 1");
+  const [date, setDate] = useState("");
+  const [capacity, setCapacity] = useState<number>(36);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const orderedVenues = useMemo(() => {
+    return (venues ?? []).slice().sort((a, b) => {
+      if (a.type !== b.type) return a.type === "regular" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [venues]);
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4">
+      <div className="font-semibold text-slate-900 mb-3">Add New Event</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+        <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Venue</span>
+          <select
+            value={venueId}
+            onChange={(e) => setVenueId(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Select a venue…</option>
+            {orderedVenues.map((v) => (
+              <option key={v._id} value={v._id}>
+                {v.name} {v.type === "championship" ? "(Championship)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Day label</span>
+          <input
+            value={day}
+            onChange={(e) => setDay(e.target.value)}
+            placeholder="Day 1"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </label>
+
+        <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Date (optional)</span>
+          <input
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            placeholder="YYYY-MM-DD"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </label>
+
+        <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Capacity</span>
+          <input
+            type="number"
+            min={1}
+            value={capacity}
+            onChange={(e) => setCapacity(Number(e.target.value))}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </label>
+
+        <div className="sm:col-span-2 flex items-center gap-3">
+      <button
+            disabled={!venueId || !day || creating}
+            onClick={async () => {
+              setError(null);
+              setCreating(true);
+              try {
+        await onCreate({ venueId: venueId as unknown as Id<"venues">, day, date: date || undefined, capacity });
+                setVenueId("");
+                setDay("Day 1");
+                setDate("");
+                setCapacity(36);
+              } catch (e: unknown) {
+                const message = e instanceof Error ? e.message : "Failed to create";
+                setError(message);
+              } finally {
+                setCreating(false);
+              }
+            }}
+            className={`px-3 py-2 rounded-md text-sm text-white ${creating ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700"}`}
+          >
+            {creating ? "Creating…" : "Add Event"}
+          </button>
+          {error && <span className="text-sm text-red-600">{error}</span>}
+        </div>
+      </div>
+    </div>
   );
 }

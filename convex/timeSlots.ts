@@ -91,3 +91,64 @@ export const getById = query({
     };
   },
 });
+
+// Create a new time slot (admin)
+export const create = mutation({
+  args: {
+    venueId: v.id("venues"),
+    day: v.string(),
+    date: v.optional(v.string()),
+    capacity: v.number(),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { venueId, day, date, capacity, isActive }) => {
+    const venue = await ctx.db.get(venueId);
+    if (!venue) throw new Error("Venue not found");
+    if (capacity <= 0) throw new Error("Capacity must be greater than 0");
+    const timeSlotId = await ctx.db.insert("timeSlots", {
+      venueId,
+      day,
+      date,
+      capacity,
+      isActive: typeof isActive === "boolean" ? isActive : true,
+    });
+    return { _id: timeSlotId };
+  },
+});
+
+// Update a time slot (admin)
+export const update = mutation({
+  args: {
+    id: v.id("timeSlots"),
+    day: v.optional(v.string()),
+    date: v.optional(v.string()),
+    capacity: v.optional(v.number()),
+  },
+  handler: async (ctx, { id, day, date, capacity }) => {
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Time slot not found");
+    const patch: any = {};
+    if (typeof day !== "undefined") patch.day = day;
+    if (typeof date !== "undefined") patch.date = date;
+    if (typeof capacity !== "undefined") {
+      if (capacity <= 0) throw new Error("Capacity must be greater than 0");
+      patch.capacity = capacity;
+    }
+    await ctx.db.patch(id, patch);
+    return { message: "Updated" };
+  },
+});
+
+// Toggle active status (admin)
+export const setActive = mutation({
+  args: {
+    id: v.id("timeSlots"),
+    isActive: v.boolean(),
+  },
+  handler: async (ctx, { id, isActive }) => {
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Time slot not found");
+    await ctx.db.patch(id, { isActive });
+    return { message: isActive ? "Activated" : "Deactivated" };
+  },
+});
