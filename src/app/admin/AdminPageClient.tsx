@@ -12,7 +12,6 @@ export default function AdminPageClient() {
   const router = useRouter();
   const registrations = useQuery(api.registrations.getAll);
   const timeSlots = useQuery(api.timeSlots.getAvailable);
-  const setupVenues = useMutation(api.venues.setup);
   const venues = useQuery(api.venues.get);
   const setVenueDetails = useMutation(api.venues.setDetails);
 
@@ -21,14 +20,7 @@ export default function AdminPageClient() {
   const [savedAtByVenue, setSavedAtByVenue] = useState<Record<string, number>>({});
   const [errorByVenue, setErrorByVenue] = useState<Record<string, string | null>>({});
 
-  const handleSetupVenues = async () => {
-    try {
-      const result = await setupVenues({});
-      alert(result.message);
-    } catch (error) {
-      alert(`Error: ${error}`);
-    }
-  };
+  // (Initial setup handled elsewhere; no-op here)
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50">
@@ -137,11 +129,11 @@ export default function AdminPageClient() {
                             key={id}
                             venue={{
                               _id: id,
-                              name: (venue as any).name,
-                              type: (venue as any).type,
-                              location: (venue as any).location,
-                              date: (venue as any).date,
-                              address: (venue as any).address,
+                              name: venue.name as string,
+                              type: venue.type as string,
+                              location: (venue as { location?: string }).location,
+                              date: (venue as { date?: string }).date,
+                              address: (venue as { address?: string }).address,
                             }}
                             saving={!!savingByVenue[id]}
                             saved={!!savedAtByVenue[id] && !savingByVenue[id] && !errorByVenue[id]}
@@ -154,12 +146,14 @@ export default function AdminPageClient() {
                                 setSavedAtByVenue((prev) => ({ ...prev, [id]: Date.now() }));
                                 setTimeout(() => {
                                   setSavedAtByVenue((prev) => {
-                                    const { [id]: _omit, ...rest } = prev;
+                                    const rest = { ...prev };
+                                    delete rest[id];
                                     return rest;
                                   });
                                 }, 2500);
-                              } catch (err: any) {
-                                setErrorByVenue((prev) => ({ ...prev, [id]: err?.message || "Failed to save" }));
+                              } catch (err: unknown) {
+                                const message = err instanceof Error ? err.message : "Failed to save";
+                                setErrorByVenue((prev) => ({ ...prev, [id]: message }));
                               } finally {
                                 setSavingByVenue((prev) => ({ ...prev, [id]: false }));
                               }

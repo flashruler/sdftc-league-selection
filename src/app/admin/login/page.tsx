@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
-export default function AdminLoginPage() {
+function AdminLoginContent() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/admin";
@@ -28,8 +28,9 @@ export default function AdminLoginPage() {
         const data = await res.json().catch(() => ({}));
         setError(data?.error || "Invalid password");
       }
-    } catch (err: any) {
-      setError(err?.message || "Login failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Login failed";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -68,5 +69,21 @@ export default function AdminLoginPage() {
         </button>
       </form>
     </main>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-indigo-50 p-6">
+          <div className="w-full max-w-sm bg-white shadow-xl border border-slate-200/50 rounded-2xl p-6 text-sm text-slate-600">
+            Loading…
+          </div>
+        </main>
+      }
+    >
+      <AdminLoginContent />
+    </Suspense>
   );
 }

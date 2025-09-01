@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useState } from "react";
 import { Header } from "./components/registration/Header";
 import { StepIndicator } from "./components/registration/StepIndicator";
@@ -26,9 +27,7 @@ export default function Home() {
     api.registrations.checkTeamAvailability,
     teamNumber && isValidTeam ? { teamNumber } : "skip"
   );
-  // Use the new bulk selections mutation; cast until Convex codegen updates
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const registerSelections = useMutation((api as any).registrations.registerSelections);
+  const registerSelections = useMutation(api.registrations.registerSelections);
 
   const handleTeamNumberChange = (value: string) => {
     const sanitized = value.replace(/\D/g, "").slice(0, 5);
@@ -67,11 +66,11 @@ export default function Home() {
     }
 
     try {
-      const result = await registerSelections({
+    const result = await registerSelections({
         teamNumber,
         selections: {
-          regular: selectedRegularIds as any,
-          championship: selectedChampionship as any,
+      regular: selectedRegularIds as unknown as Id<"timeSlots">[],
+      championship: selectedChampionship as unknown as Id<"timeSlots">,
         },
       });
       
