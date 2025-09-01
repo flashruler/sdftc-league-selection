@@ -38,12 +38,17 @@ export default function RootLayout({
         </nav>
         <ConvexClientProvider>{children}</ConvexClientProvider>
         <footer className="bg-slate-100 text-slate-600 p-6 mt-12 flex items-center">
-          <div className=" mx-auto text-center flex flex-row">
-            <p className="text-sm">
-            </p>
+          <div className=" mx-auto text-center flex flex-col">
             <Link href="https://edlweiss.me/" className="text-sm hover:underline">
-               Developed by edlweiss.me
+              Developed by Jay Buensuceso
             </Link>
+            <p className="text-sm">
+              If you run into any errors please email:
+              {" "}
+              <a href="mailto:jbuens001@gmail.com" className="underline">
+                jbuens001@gmail.com
+              </a>
+            </p>
           </div>
         </footer>
       </body>
