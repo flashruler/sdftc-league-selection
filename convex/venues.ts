@@ -230,3 +230,34 @@ export const setDetails = mutation({
     return { message: "Venue updated" };
   },
 });
+
+// Create a new venue with minimal fields (admin helper)
+export const createSimple = mutation({
+  args: {
+    name: v.string(),
+    address: v.optional(v.string()),
+    location: v.optional(v.string()),
+    date: v.optional(v.string()),
+    type: v.optional(v.union(v.literal("regular"), v.literal("championship"))),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { name, address, location, date, type, isActive }) => {
+    // Naive check for existing by name to avoid accidental dupes
+    const existing = await ctx.db
+      .query("venues")
+      .filter((q) => q.eq(q.field("name"), name))
+      .first();
+    if (existing) {
+      return { _id: existing._id };
+    }
+    const id = await ctx.db.insert("venues", {
+      name,
+      type: type ?? "regular",
+      isActive: typeof isActive === "boolean" ? isActive : true,
+      address,
+      location,
+      date,
+    } as any);
+    return { _id: id };
+  },
+});

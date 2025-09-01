@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
 import { VenueDetailsCard } from "./components/VenueDetailsCard";
@@ -17,6 +17,7 @@ export default function AdminPageClient() {
   const setVenueDetails = useMutation(api.venues.setDetails);
   const createTimeSlot = useMutation(api.timeSlots.create);
   const setTimeSlotActive = useMutation(api.timeSlots.setActive);
+  const createVenueSimple = useMutation(api.venues.createSimple);
 
   // Per-venue UX state
   const [savingByVenue, setSavingByVenue] = useState<Record<string, boolean>>({});
@@ -185,10 +186,25 @@ export default function AdminPageClient() {
                       </div>
                     </div>
 
-                    <AddEventForm venues={venues} onCreate={async (payload) => {
-                      await createTimeSlot(payload);
-                      router.refresh();
-                    }} />
+                    <AddEventForm
+                      onCreate={async ({ venueName, address, day, date, capacity }) => {
+                        // Try to find existing by exact name
+                        const existing = (venues ?? []).find((v) => v.name.trim() === venueName.trim());
+                        let venueId: Id<"venues">;
+                        if (existing) {
+                          venueId = existing._id as Id<"venues">;
+                          // If address provided and not set, patch via setDetails
+                          if (address && (existing as { address?: string }).address !== address) {
+                            await setVenueDetails({ venueId, address });
+                          }
+                        } else {
+                          const created = await createVenueSimple({ name: venueName, address });
+                          venueId = created._id as Id<"venues">;
+                        }
+                        await createTimeSlot({ venueId, day, date, capacity });
+                        router.refresh();
+                      }}
+                    />
 
                     <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {venues?.map((v) => {
@@ -259,47 +275,41 @@ export default function AdminPageClient() {
   );
 }
 
-type VenueOption = { _id: string; name: string; type: string };
-
 function AddEventForm({
-  venues,
   onCreate,
 }: {
-  venues: Array<VenueOption> | undefined;
-  onCreate: (payload: { venueId: Id<"venues">; day: string; date?: string; capacity: number }) => Promise<void>;
+  onCreate: (payload: { venueName: string; address?: string; day: string; date?: string; capacity: number }) => Promise<void>;
 }) {
-  const [venueId, setVenueId] = useState<string>("");
+  const [venueName, setVenueName] = useState("");
+  const [address, setAddress] = useState("");
   const [day, setDay] = useState("Day 1");
   const [date, setDate] = useState("");
   const [capacity, setCapacity] = useState<number>(36);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const orderedVenues = useMemo(() => {
-    return (venues ?? []).slice().sort((a, b) => {
-      if (a.type !== b.type) return a.type === "regular" ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [venues]);
-
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
       <div className="font-semibold text-slate-900 mb-3">Add New Event</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Venue</span>
-          <select
-            value={venueId}
-            onChange={(e) => setVenueId(e.target.value)}
-            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
-          >
-            <option value="">Select a venue…</option>
-            {orderedVenues.map((v) => (
-              <option key={v._id} value={v._id}>
-                {v.name} {v.type === "championship" ? "(Championship)" : ""}
-              </option>
-            ))}
-          </select>
+          <span className="block text-slate-700 mb-1">Venue Name</span>
+          <input
+            value={venueName}
+            onChange={(e) => setVenueName(e.target.value)}
+            placeholder="Central High School"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </label>
+
+        <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Address (optional)</span>
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="123 Main St, City, ST"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
         </label>
 
         <label className="text-sm">
@@ -335,13 +345,14 @@ function AddEventForm({
 
         <div className="sm:col-span-2 flex items-center gap-3">
       <button
-            disabled={!venueId || !day || creating}
+      disabled={!venueName.trim() || !day || creating}
             onClick={async () => {
               setError(null);
               setCreating(true);
               try {
-        await onCreate({ venueId: venueId as unknown as Id<"venues">, day, date: date || undefined, capacity });
-                setVenueId("");
+        await onCreate({ venueName: venueName.trim(), address: address.trim() || undefined, day, date: date || undefined, capacity });
+        setVenueName("");
+        setAddress("");
                 setDay("Day 1");
                 setDate("");
                 setCapacity(36);
