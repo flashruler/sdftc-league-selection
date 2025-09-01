@@ -261,3 +261,47 @@ export const createSimple = mutation({
     return { _id: id };
   },
 });
+
+// Permanently delete a venue and its empty time slots (admin)
+export const remove = mutation({
+  args: {
+    id: v.id("venues"),
+  },
+  handler: async (ctx, { id }) => {
+    const venue = await ctx.db.get(id);
+    if (!venue) throw new Error("Venue not found");
+
+    // Collect all time slots for this venue
+    const slots = await ctx.db
+      .query("timeSlots")
+      .withIndex("by_venue", (q) => q.eq("venueId", id))
+      .collect();
+
+    // If any slot has registrations, block deletion
+    for (const slot of slots) {
+      const regs = await ctx.db
+        .query("registrations")
+        .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot._id))
+        .first();
+      if (regs) {
+        throw new Error("Cannot delete an event with existing registrations. Deactivate slots or clear registrations first.");
+      }
+    }
+
+    // Delete capacity tracking and slots
+    for (const slot of slots) {
+      const caps = await ctx.db
+        .query("capacityTracking")
+        .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot._id))
+        .collect();
+      for (const c of caps) {
+        await ctx.db.delete(c._id);
+      }
+      await ctx.db.delete(slot._id);
+    }
+
+    // Finally delete the venue
+    await ctx.db.delete(id);
+    return { message: "Venue deleted" };
+  },
+});

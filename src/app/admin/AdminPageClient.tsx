@@ -19,6 +19,7 @@ export default function AdminPageClient() {
   const setTimeSlotActive = useMutation(api.timeSlots.setActive);
   const deleteTimeSlot = useMutation(api.timeSlots.remove);
   const createVenueSimple = useMutation(api.venues.createSimple);
+  const deleteVenue = useMutation(api.venues.remove);
 
   // Per-venue UX state
   const [savingByVenue, setSavingByVenue] = useState<Record<string, boolean>>({});
@@ -72,12 +73,11 @@ export default function AdminPageClient() {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {timeSlots?.map((slot) => (
+                      {timeSlots?.map((slot) => (
                         <div
-                                key={slot._id}
-                                className={`border-2 rounded-xl p-5 transition-all ${
-                                  slot.isAvailable ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                                } ${slot.isActive ? "opacity-100" : "opacity-60"}`}
+                          key={slot._id}
+                          className={`border-2 rounded-xl p-5 transition-all ${slot.isAvailable ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                            } ${slot.isActive ? "opacity-100" : "opacity-60"}`}
                         >
                           <div className="space-y-3">
                             <div className="font-semibold text-slate-900">{slot.venueName}</div>
@@ -87,18 +87,16 @@ export default function AdminPageClient() {
                                 {slot.currentCount}/{slot.capacity}
                               </span>
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  slot.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                                }`}
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${slot.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                                  }`}
                               >
                                 {slot.isAvailable ? "Available" : "Full"}
                               </span>
                             </div>
                             <div className="w-full bg-slate-200 rounded-full h-3">
                               <div
-                                className={`h-3 rounded-full transition-all ${
-                                  slot.isAvailable ? "bg-green-500" : "bg-red-500"
-                                }`}
+                                className={`h-3 rounded-full transition-all ${slot.isAvailable ? "bg-green-500" : "bg-red-500"
+                                  }`}
                                 style={{ width: `${(slot.currentCount / slot.capacity) * 100}%` }}
                               ></div>
                             </div>
@@ -192,17 +190,21 @@ export default function AdminPageClient() {
 
                     {/* Quick add: create a regular venue with Saturday/Sunday pair */}
                     <AddRegularPairForm
-                      onCreate={async ({ venueName, address, satDate, sunDate, capacity }) => {
+                      onCreate={async ({ venueName, address, location, satDate, sunDate, capacity }) => {
                         const existing = (venues ?? []).find((v) => v.name.trim() === venueName.trim());
                         let venueId: Id<"venues">;
                         if (existing) {
                           venueId = existing._id as Id<"venues">;
-                          if (address && (existing as { address?: string }).address !== address) {
-                            await setVenueDetails({ venueId, address });
-                          }
+                          const patch: { address?: string; location?: string } = {};
+                          if (address && (existing as { address?: string }).address !== address) patch.address = address;
+                          if (location && (existing as { location?: string }).location !== location) patch.location = location;
+                          if (Object.keys(patch).length) await setVenueDetails({ venueId, ...patch });
                         } else {
                           const created = await createVenueSimple({ name: venueName, address, type: "regular" });
                           venueId = created._id as Id<"venues">;
+                          if (address || location) {
+                            await setVenueDetails({ venueId, ...(address ? { address } : {}), ...(location ? { location } : {}) });
+                          }
                         }
                         // Create Saturday and Sunday slots
                         await createTimeSlot({ venueId, day: "Saturday", date: satDate || undefined, capacity });
@@ -214,17 +216,21 @@ export default function AdminPageClient() {
                     {/* Single add remains available */}
                     <div className="mt-6">
                       <AddEventForm
-                        onCreate={async ({ venueName, address, day, date, capacity }) => {
+                        onCreate={async ({ venueName, address, location, day, date, capacity }) => {
                           const existing = (venues ?? []).find((v) => v.name.trim() === venueName.trim());
                           let venueId: Id<"venues">;
                           if (existing) {
                             venueId = existing._id as Id<"venues">;
-                            if (address && (existing as { address?: string }).address !== address) {
-                              await setVenueDetails({ venueId, address });
-                            }
+                            const patch: { address?: string; location?: string } = {};
+                            if (address && (existing as { address?: string }).address !== address) patch.address = address;
+                            if (location && (existing as { location?: string }).location !== location) patch.location = location;
+                            if (Object.keys(patch).length) await setVenueDetails({ venueId, ...patch });
                           } else {
                             const created = await createVenueSimple({ name: venueName, address });
                             venueId = created._id as Id<"venues">;
+                            if (address || location) {
+                              await setVenueDetails({ venueId, ...(address ? { address } : {}), ...(location ? { location } : {}) });
+                            }
                           }
                           await createTimeSlot({ venueId, day, date, capacity });
                           router.refresh();
@@ -243,6 +249,22 @@ export default function AdminPageClient() {
                             <div className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
                               {v.name}
                               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{v.type}</span>
+                              <span className="flex-1" />
+                              <button
+                                onClick={async () => {
+                                  const ok = window.confirm(`Delete the event "${v.name}" and all of its empty time slots? This cannot be undone.`);
+                                  if (!ok) return;
+                                  try {
+                                    await deleteVenue({ id: v._id as Id<"venues"> });
+                                    router.refresh();
+                                  } catch (e: unknown) {
+                                    alert(e instanceof Error ? e.message : "Failed to delete event");
+                                  }
+                                }}
+                                className="px-2 py-1 rounded-md border text-xs border-red-300 text-red-700 hover:bg-red-50"
+                              >
+                                Delete Event
+                              </button>
                             </div>
                             {isRegular ? (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -363,10 +385,11 @@ export default function AdminPageClient() {
 function AddEventForm({
   onCreate,
 }: {
-  onCreate: (payload: { venueName: string; address?: string; day: string; date?: string; capacity: number }) => Promise<void>;
+  onCreate: (payload: { venueName: string; address?: string; location?: string; day: string; date?: string; capacity: number }) => Promise<void>;
 }) {
   const [venueName, setVenueName] = useState("");
   const [address, setAddress] = useState("");
+  const [location, setLocation] = useState("");
   const [day, setDay] = useState("Day 1");
   const [date, setDate] = useState("");
   const [capacity, setCapacity] = useState<number>(36);
@@ -375,10 +398,10 @@ function AddEventForm({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
-      <div className="font-semibold text-slate-900 mb-3">Add New Event</div>
+      <div className="font-semibold text-slate-900 mb-3">Add New Championship Event</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Venue Name</span>
+          <span className="block text-slate-700 mb-1">Event name</span>
           <input
             value={venueName}
             onChange={(e) => setVenueName(e.target.value)}
@@ -388,7 +411,7 @@ function AddEventForm({
         </label>
 
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Address (optional)</span>
+          <span className="block text-slate-700 mb-1">Address</span>
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -398,6 +421,16 @@ function AddEventForm({
         </label>
 
         <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Event Location</span>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Central High School, San Diego, CA"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </label>
+
+        {/* <label className="text-sm">
           <span className="block text-slate-700 mb-1">Day label</span>
           <input
             value={day}
@@ -405,10 +438,10 @@ function AddEventForm({
             placeholder="Day 1"
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
           />
-        </label>
+        </label> */}
 
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Date (optional)</span>
+          <span className="block text-slate-700 mb-1">Date</span>
           <input
             value={date}
             onChange={(e) => setDate(e.target.value)}
@@ -429,15 +462,16 @@ function AddEventForm({
         </label>
 
         <div className="sm:col-span-2 flex items-center gap-3">
-      <button
-      disabled={!venueName.trim() || !day || creating}
+          <button
+            disabled={!venueName.trim() || !day || creating}
             onClick={async () => {
               setError(null);
               setCreating(true);
               try {
-        await onCreate({ venueName: venueName.trim(), address: address.trim() || undefined, day, date: date || undefined, capacity });
-        setVenueName("");
-        setAddress("");
+                await onCreate({ venueName: venueName.trim(), address: address.trim() || undefined, location: location.trim() || undefined, day, date: date || undefined, capacity });
+                setVenueName("");
+                setAddress("");
+                setLocation("");
                 setDay("Day 1");
                 setDate("");
                 setCapacity(36);
@@ -463,10 +497,11 @@ function AddEventForm({
 function AddRegularPairForm({
   onCreate,
 }: {
-  onCreate: (payload: { venueName: string; address?: string; satDate?: string; sunDate?: string; capacity: number }) => Promise<void>;
+  onCreate: (payload: { venueName: string; address?: string; location?: string; satDate?: string; sunDate?: string; capacity: number }) => Promise<void>;
 }) {
   const [venueName, setVenueName] = useState("");
   const [address, setAddress] = useState("");
+  const [location, setLocation] = useState("");
   const [satDate, setSatDate] = useState("");
   const [sunDate, setSunDate] = useState("");
   const [capacity, setCapacity] = useState<number>(36);
@@ -475,10 +510,10 @@ function AddRegularPairForm({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4">
-      <div className="font-semibold text-slate-900 mb-3">Add Regular Venue (Saturday + Sunday)</div>
+      <div className="font-semibold text-slate-900 mb-3">Add New League Meet</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Venue Name</span>
+          <span className="block text-slate-700 mb-1">Event Name</span>
           <input
             value={venueName}
             onChange={(e) => setVenueName(e.target.value)}
@@ -487,7 +522,7 @@ function AddRegularPairForm({
           />
         </label>
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Address (optional)</span>
+          <span className="block text-slate-700 mb-1">Address</span>
           <input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
@@ -496,7 +531,16 @@ function AddRegularPairForm({
           />
         </label>
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Saturday Date (optional)</span>
+          <span className="block text-slate-700 mb-1">Event Location</span>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="Central High School, San Diego, CA"
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="block text-slate-700 mb-1">Saturday Date</span>
           <input
             value={satDate}
             onChange={(e) => setSatDate(e.target.value)}
@@ -505,7 +549,7 @@ function AddRegularPairForm({
           />
         </label>
         <label className="text-sm">
-          <span className="block text-slate-700 mb-1">Sunday Date (optional)</span>
+          <span className="block text-slate-700 mb-1">Sunday Date</span>
           <input
             value={sunDate}
             onChange={(e) => setSunDate(e.target.value)}
@@ -530,9 +574,10 @@ function AddRegularPairForm({
               setError(null);
               setCreating(true);
               try {
-                await onCreate({ venueName: venueName.trim(), address: address.trim() || undefined, satDate: satDate || undefined, sunDate: sunDate || undefined, capacity });
+                await onCreate({ venueName: venueName.trim(), address: address.trim() || undefined, location: location.trim() || undefined, satDate: satDate || undefined, sunDate: sunDate || undefined, capacity });
                 setVenueName("");
                 setAddress("");
+                setLocation("");
                 setSatDate("");
                 setSunDate("");
                 setCapacity(36);
@@ -611,41 +656,43 @@ function DayCard({
               </button>
             </div>
           ) : (
-            <div className="flex gap-2 items-end">
-              <input
+            <div className="flex flex-col gap-2 items-end">
+              <div className="flex flex-row"><input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="border border-slate-300 rounded-md px-3 py-2 text-sm"
               />
-              <input
-                type="number"
-                min={1}
-                value={capacity}
-                onChange={(e) => setCapacity(Number(e.target.value))}
-                className="w-28 border border-slate-300 rounded-md px-3 py-2 text-sm"
-              />
-              <button
-                onClick={async () => {
-                  await onCreate({ date: date || undefined, capacity });
-                  setExpanded(false);
-                  setDate("");
-                  setCapacity(36);
-                }}
-                className="px-2 py-1 rounded-md border text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
-              >
-                Create
-              </button>
-              <button
-                onClick={() => {
-                  setExpanded(false);
-                  setDate("");
-                  setCapacity(36);
-                }}
-                className="px-2 py-1 rounded-md border text-xs border-slate-300 text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
+                <input
+                  type="number"
+                  min={1}
+                  value={capacity}
+                  onChange={(e) => setCapacity(Number(e.target.value))}
+                  className="w-28 border border-slate-300 rounded-md px-3 py-2 text-sm"
+                /></div>
+              <div className="flex flex-row">
+                <button
+                  onClick={async () => {
+                    await onCreate({ date: date || undefined, capacity });
+                    setExpanded(false);
+                    setDate("");
+                    setCapacity(36);
+                  }}
+                  className="px-2 py-1 rounded-md border text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => {
+                    setExpanded(false);
+                    setDate("");
+                    setCapacity(36);
+                  }}
+                  className="px-2 py-1 rounded-md border text-xs border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </div>

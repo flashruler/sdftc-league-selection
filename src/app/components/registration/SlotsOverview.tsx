@@ -2,9 +2,16 @@
 
 type Slot = {
   _id: string;
+  venueId: string;
   venueName: string;
+  venueLocation?: string;
+  venueDate?: string;
+  venueAddress?: string;
+  venueType: string;
   day: string;
+  date?: string;
   isAvailable: boolean;
+  spotsRemaining: number;
   currentCount: number;
   capacity: number;
 };
@@ -33,8 +40,18 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
             }`}
           >
             <div className="space-y-3">
-              <div className="font-semibold text-slate-900">{slot.venueName}</div>
-              <div className="text-sm text-slate-600">{slot.day}</div>
+              <div className="font-semibold text-slate-900 text-xl">{slot.venueName}</div>
+              <div className="font-semibold text-slate-900 text-sm">{slot.venueLocation}</div>
+              {(() => {
+                const formatDisplayDate = (s: string) => {
+                  const d = new Date(s);
+                  if (isNaN(d.getTime())) return s; // fallback
+                  return d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
+                };
+                const chosenDate = slot.date || slot.venueDate;
+                const dateLabel = chosenDate ? formatDisplayDate(chosenDate) : slot.day;
+                return <div className="text-sm text-slate-600">{dateLabel}</div>;
+              })()}
               <div className="flex items-center justify-between">
                 <span className={`text-sm font-medium ${slot.isAvailable ? "text-green-700" : "text-red-700"}`}>
                   {slot.currentCount}/{slot.capacity} teams
