@@ -22,7 +22,7 @@ export function RegistrationClosedCard({ deadlineFormatted }: Props) {
             : "Registration is currently not available"}
         </p>
         <div className="mt-6 text-sm text-slate-500">
-          Please contact your league coordinator for more information.
+          Please contact your program delivery partner for more information.
         </div>
       </div>
     </div>

@@ -57,23 +57,23 @@ export default function Home() {
       .filter(Boolean);
 
     if (selectedRegularIds.length !== regularVenueIds.length) {
-      alert("Please pick one day for each regular venue (Venue 1, Venue 2, Venue 3).");
+      alert("Please pick one day for each league meet.");
       return;
     }
     if (!selectedChampionship) {
-      alert("Please pick one championship day.");
+      alert("Please pick a League Championship");
       return;
     }
 
     try {
-    const result = await registerSelections({
+      const result = await registerSelections({
         teamNumber,
         selections: {
-      regular: selectedRegularIds as unknown as Id<"timeSlots">[],
-      championship: selectedChampionship as unknown as Id<"timeSlots">,
+          regular: selectedRegularIds as unknown as Id<"timeSlots">[],
+          championship: selectedChampionship as unknown as Id<"timeSlots">,
         },
       });
-      
+
       alert(result.message);
       // Reset form
       setTeamNumber("");
@@ -141,21 +141,20 @@ export default function Home() {
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900">Step 2: Make Your Selections</h2>
-                  <p className="text-slate-600">Pick one day for each regular venue (Venue 1, Venue 2, Venue 3), and one championship day.</p>
+                  <p className="text-slate-600">Pick a League and a day for each league meet.</p>
                 </div>
               </div>
-              
-              <form onSubmit={handleSubmit} className="space-y-8">
-                <RegularVenueSelector
-                  timeSlots={timeSlots}
-                  selectedRegular={selectedRegular}
-                  onSelect={(venueId, slotId) => setSelectedRegular((prev) => ({ ...prev, [venueId]: slotId }))}
-                />
 
+              <form onSubmit={handleSubmit} className="space-y-8">
                 <ChampionshipSelector
                   timeSlots={timeSlots}
                   selected={selectedChampionship}
                   onSelect={setSelectedChampionship}
+                />
+                <RegularVenueSelector
+                  timeSlots={timeSlots}
+                  selectedRegular={selectedRegular}
+                  onSelect={(venueId, slotId) => setSelectedRegular((prev) => ({ ...prev, [venueId]: slotId }))}
                 />
 
                 <button

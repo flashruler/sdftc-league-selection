@@ -30,7 +30,7 @@ export function StepIndicator({ active }: StepIndicatorProps) {
               active ? "text-slate-700" : "text-slate-500"
             }`}
           >
-            Pick Venue 1, 2, 3 days + Championship
+            Pick your league and events!
           </span>
         </div>
       </div>

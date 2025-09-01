@@ -12,11 +12,12 @@ import { Tabs } from "./components/Tabs";
 export default function AdminPageClient() {
   const router = useRouter();
   const registrations = useQuery(api.registrations.getAll);
-  const timeSlots = useQuery(api.timeSlots.getAvailable);
+  const timeSlots = useQuery(api.timeSlots.getAllForAdmin);
   const venues = useQuery(api.venues.get);
   const setVenueDetails = useMutation(api.venues.setDetails);
   const createTimeSlot = useMutation(api.timeSlots.create);
   const setTimeSlotActive = useMutation(api.timeSlots.setActive);
+  const deleteTimeSlot = useMutation(api.timeSlots.remove);
   const createVenueSimple = useMutation(api.venues.createSimple);
 
   // Per-venue UX state
@@ -71,12 +72,12 @@ export default function AdminPageClient() {
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {timeSlots?.map((slot) => (
+                            {timeSlots?.map((slot) => (
                         <div
-                          key={slot._id}
-                          className={`border-2 rounded-xl p-5 transition-all ${
-                            slot.isAvailable ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                          }`}
+                                key={slot._id}
+                                className={`border-2 rounded-xl p-5 transition-all ${
+                                  slot.isAvailable ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                                } ${slot.isActive ? "opacity-100" : "opacity-60"}`}
                         >
                           <div className="space-y-3">
                             <div className="font-semibold text-slate-900">{slot.venueName}</div>
@@ -101,6 +102,9 @@ export default function AdminPageClient() {
                                 style={{ width: `${(slot.currentCount / slot.capacity) * 100}%` }}
                               ></div>
                             </div>
+                            {!slot.isActive && (
+                              <div className="text-xs text-slate-500">Inactive</div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -254,6 +258,10 @@ export default function AdminPageClient() {
                                     await createTimeSlot({ venueId: v._id as Id<"venues">, day: "Saturday", date: date || undefined, capacity });
                                     router.refresh();
                                   }}
+                                  onDelete={async (id) => {
+                                    await deleteTimeSlot({ id });
+                                    router.refresh();
+                                  }}
                                 />
                                 {/* Sunday */}
                                 <DayCard
@@ -265,6 +273,10 @@ export default function AdminPageClient() {
                                   }}
                                   onCreate={async ({ date, capacity }) => {
                                     await createTimeSlot({ venueId: v._id as Id<"venues">, day: "Sunday", date: date || undefined, capacity });
+                                    router.refresh();
+                                  }}
+                                  onDelete={async (id) => {
+                                    await deleteTimeSlot({ id });
                                     router.refresh();
                                   }}
                                 />
@@ -282,15 +294,28 @@ export default function AdminPageClient() {
                                         {s.date ? <span className="text-slate-500"> · {s.date}</span> : null}
                                         <span className="text-slate-500"> · cap {s.capacity}</span>
                                       </div>
-                                      <button
-                                        onClick={async () => {
-                                          await setTimeSlotActive({ id: s._id, isActive: !s.isActive });
-                                          router.refresh();
-                                        }}
-                                        className={`px-2 py-1 rounded-md border text-xs ${s.isActive ? "border-red-300 text-red-700 hover:bg-red-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
-                                      >
-                                        {s.isActive ? "Deactivate" : "Activate"}
-                                      </button>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={async () => {
+                                            await setTimeSlotActive({ id: s._id, isActive: !s.isActive });
+                                            router.refresh();
+                                          }}
+                                          className={`px-2 py-1 rounded-md border text-xs ${s.isActive ? "border-amber-300 text-amber-700 hover:bg-amber-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
+                                        >
+                                          {s.isActive ? "Deactivate" : "Activate"}
+                                        </button>
+                                        {!s.isActive && (
+                                          <button
+                                            onClick={async () => {
+                                              await deleteTimeSlot({ id: s._id });
+                                              router.refresh();
+                                            }}
+                                            className="px-2 py-1 rounded-md border text-xs border-red-300 text-red-700 hover:bg-red-50"
+                                          >
+                                            Delete
+                                          </button>
+                                        )}
+                                      </div>
                                     </li>
                                   ))
                                 )}
@@ -535,54 +560,94 @@ function DayCard({
   slot,
   onToggle,
   onCreate,
+  onDelete,
 }: {
   label: string;
   slot: AvailableSlot | null;
   onToggle: (id: Id<"timeSlots">, currentActive: boolean) => Promise<void>;
   onCreate: (payload: { date?: string; capacity: number }) => Promise<void>;
+  onDelete: (id: Id<"timeSlots">) => Promise<void>;
 }) {
   const [date, setDate] = useState("");
   const [capacity, setCapacity] = useState<number>(36);
+  const [expanded, setExpanded] = useState(false);
   return (
     <div className="border rounded-lg p-3">
       <div className="text-sm font-medium text-slate-800 mb-2">{label}</div>
-  {slot ? (
+      {slot ? (
         <div className="flex items-center justify-between text-sm">
           <div className="text-slate-700">
             <span className="font-medium">{slot.day}</span>
             {slot.date ? <span className="text-slate-500"> · {slot.date}</span> : null}
             <span className="text-slate-500"> · cap {slot.capacity}</span>
           </div>
-          <button
-            onClick={() => onToggle(slot._id, slot.isActive)}
-            className={`px-2 py-1 rounded-md border text-xs ${slot.isActive ? "border-red-300 text-red-700 hover:bg-red-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
-          >
-            {slot.isActive ? "Deactivate" : "Activate"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onToggle(slot._id, slot.isActive)}
+              className={`px-2 py-1 rounded-md border text-xs ${slot.isActive ? "border-amber-300 text-amber-700 hover:bg-amber-50" : "border-green-300 text-green-700 hover:bg-green-50"}`}
+            >
+              {slot.isActive ? "Deactivate" : "Activate"}
+            </button>
+            {!slot.isActive && (
+              <button
+                onClick={() => onDelete(slot._id)}
+                className="px-2 py-1 rounded-md border text-xs border-red-300 text-red-700 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="flex gap-2 items-end">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="border border-slate-300 rounded-md px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              min={1}
-              value={capacity}
-              onChange={(e) => setCapacity(Number(e.target.value))}
-              className="w-28 border border-slate-300 rounded-md px-3 py-2 text-sm"
-            />
-            <button
-              onClick={() => onCreate({ date: date || undefined, capacity })}
-              className="px-2 py-1 rounded-md border text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
-            >
-              Create
-            </button>
-          </div>
+          {!expanded ? (
+            <div className="flex items-center justify-between text-sm text-slate-500">
+              <span>No {label} slot</span>
+              <button
+                onClick={() => setExpanded(true)}
+                className="px-2 py-1 rounded-md border text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+              >
+                Create {label}
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 items-end">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+              <input
+                type="number"
+                min={1}
+                value={capacity}
+                onChange={(e) => setCapacity(Number(e.target.value))}
+                className="w-28 border border-slate-300 rounded-md px-3 py-2 text-sm"
+              />
+              <button
+                onClick={async () => {
+                  await onCreate({ date: date || undefined, capacity });
+                  setExpanded(false);
+                  setDate("");
+                  setCapacity(36);
+                }}
+                className="px-2 py-1 rounded-md border text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+              >
+                Create
+              </button>
+              <button
+                onClick={() => {
+                  setExpanded(false);
+                  setDate("");
+                  setCapacity(36);
+                }}
+                className="px-2 py-1 rounded-md border text-xs border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -49,6 +49,37 @@ export const getAvailable = query({
   },
 });
 
+// Admin: Get all time slots (active and inactive) with availability info
+export const getAllForAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    const timeSlots = await ctx.db.query("timeSlots").collect();
+
+    const result: any[] = [];
+    for (const slot of timeSlots) {
+      const venue = await ctx.db.get(slot.venueId);
+      if (!venue) continue;
+      const regs = await ctx.db
+        .query("registrations")
+        .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot._id))
+        .collect();
+      result.push({
+        ...slot,
+        venueName: venue.name,
+        venueType: venue.type,
+        currentCount: regs.length,
+        spotsRemaining: slot.capacity - regs.length,
+        isAvailable: regs.length < slot.capacity,
+      });
+    }
+    return result.sort((a, b) => {
+      if (a.venueType !== b.venueType) return a.venueType === "regular" ? -1 : 1;
+      if (a.venueName !== b.venueName) return a.venueName.localeCompare(b.venueName);
+      return a.day.localeCompare(b.day);
+    });
+  },
+});
+
 // Get time slots for a specific venue
 export const getByVenue = query({
   args: {
@@ -150,5 +181,37 @@ export const setActive = mutation({
     if (!existing) throw new Error("Time slot not found");
     await ctx.db.patch(id, { isActive });
     return { message: isActive ? "Activated" : "Deactivated" };
+  },
+});
+
+// Permanently delete a time slot (admin)
+export const remove = mutation({
+  args: {
+    id: v.id("timeSlots"),
+  },
+  handler: async (ctx, { id }) => {
+    const existing = await ctx.db.get(id);
+    if (!existing) throw new Error("Time slot not found");
+
+    // Block deletion if there are registrations
+    const regs = await ctx.db
+      .query("registrations")
+      .withIndex("by_time_slot", (q) => q.eq("timeSlotId", id))
+      .collect();
+    if (regs.length > 0) {
+      throw new Error("Cannot delete a time slot that has registrations. Deactivate instead.");
+    }
+
+    // Remove capacity tracking rows if present
+    const caps = await ctx.db
+      .query("capacityTracking")
+      .withIndex("by_time_slot", (q) => q.eq("timeSlotId", id))
+      .collect();
+    for (const c of caps) {
+      await ctx.db.delete(c._id);
+    }
+
+    await ctx.db.delete(id);
+    return { message: "Deleted" };
   },
 });
