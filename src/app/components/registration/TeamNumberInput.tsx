@@ -25,8 +25,8 @@ export function TeamNumberInput({
   return (
     <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-8 mb-8">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+          <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -55,7 +55,7 @@ export function TeamNumberInput({
               className={`flex-1 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                 teamNumber && !isValid
                   ? "border-red-400 focus:ring-red-500 focus:border-transparent"
-                  : "border-slate-300 focus:ring-blue-500 focus:border-transparent"
+                  : "border-slate-300 focus:ring-orange-500 focus:border-transparent"
               }`}
               placeholder="Enter team number"
               aria-invalid={teamNumber ? !isValid : undefined}
@@ -64,7 +64,7 @@ export function TeamNumberInput({
             <button
               onClick={onContinue}
               disabled={!canContinue}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed font-medium transition-colors"
+              className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-orange-300 disabled:cursor-not-allowed font-medium transition-colors"
             >
               Continue
             </button>

@@ -9,7 +9,7 @@ export function StepIndicator({ active }: StepIndicatorProps) {
     <div className="mb-8">
       <div className="flex items-center justify-center space-x-4">
         <div className="flex items-center">
-          <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-medium">
+          <div className="flex items-center justify-center w-8 h-8 bg-orange-500 text-white rounded-full text-sm font-medium">
             1
           </div>
           <span className="ml-2 text-sm font-medium text-slate-700">
@@ -20,7 +20,7 @@ export function StepIndicator({ active }: StepIndicatorProps) {
         <div className="flex items-center">
           <div
             className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
-              active ? "bg-blue-600 text-white" : "bg-slate-300 text-slate-500"
+              active ? "bg-orange-500 text-white" : "bg-slate-300 text-slate-500"
             }`}
           >
             2
