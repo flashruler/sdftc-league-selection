@@ -14,19 +14,23 @@ export const getAvailable = query({
     
     for (const slot of timeSlots) {
       const venue = await ctx.db.get(slot.venueId);
-      const capacity = await ctx.db
-        .query("capacityTracking")
+      // Compute currentCount from registrations for real-time accuracy
+      const regs = await ctx.db
+        .query("registrations")
         .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot._id))
-        .first();
+        .collect();
 
-      if (venue) {
+    if (venue) {
         result.push({
           ...slot,
           venueName: venue.name,
+      venueLocation: (venue as any).location,
+      venueDate: (venue as any).date,
+          venueAddress: (venue as any).address,
           venueType: venue.type,
-          currentCount: capacity?.currentCount || 0,
-          spotsRemaining: slot.capacity - (capacity?.currentCount || 0),
-          isAvailable: (capacity?.currentCount || 0) < slot.capacity,
+          currentCount: regs.length,
+          spotsRemaining: slot.capacity - regs.length,
+          isAvailable: regs.length < slot.capacity,
         });
       }
     }
@@ -69,18 +73,21 @@ export const getById = query({
     if (!timeSlot) return null;
 
     const venue = await ctx.db.get(timeSlot.venueId);
-    const capacity = await ctx.db
-      .query("capacityTracking")
+    const regs = await ctx.db
+      .query("registrations")
       .withIndex("by_time_slot", (q) => q.eq("timeSlotId", args.id))
-      .first();
+      .collect();
 
     return {
       ...timeSlot,
       venueName: venue?.name,
+  venueLocation: (venue as any)?.location,
+  venueDate: (venue as any)?.date,
+  venueAddress: (venue as any)?.address,
       venueType: venue?.type,
-      currentCount: capacity?.currentCount || 0,
-      spotsRemaining: timeSlot.capacity - (capacity?.currentCount || 0),
-      isAvailable: (capacity?.currentCount || 0) < timeSlot.capacity,
+      currentCount: regs.length,
+      spotsRemaining: timeSlot.capacity - regs.length,
+      isAvailable: regs.length < timeSlot.capacity,
     };
   },
 });

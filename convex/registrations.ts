@@ -58,13 +58,14 @@ export const getAll = query({
 
     const result = [];
     
-    for (const registration of registrations) {
+  for (const registration of registrations) {
       const venue = await ctx.db.get(registration.venueId);
       const timeSlot = await ctx.db.get(registration.timeSlotId);
       
       result.push({
         ...registration,
         venueName: venue?.name,
+    venueType: venue?.type,
         day: timeSlot?.day,
         registrationDateFormatted: new Date(registration.registrationDate).toLocaleString(),
       });
@@ -134,15 +135,12 @@ export const register = mutation({
       throw new Error("Invalid or inactive venue");
     }
 
-    // Check capacity
-    const capacityInfo = await ctx.db
-      .query("capacityTracking")
+    // Check capacity (computed from registrations for real-time accuracy)
+    const regs = await ctx.db
+      .query("registrations")
       .withIndex("by_time_slot", (q) => q.eq("timeSlotId", args.timeSlotId))
-      .first();
-
-    const currentCount = capacityInfo?.currentCount || 0;
-    
-    if (currentCount >= timeSlot.capacity) {
+      .collect();
+    if (regs.length >= timeSlot.capacity) {
       throw new Error(`This time slot is full (${timeSlot.capacity}/${timeSlot.capacity} teams)`);
     }
 
@@ -154,19 +152,7 @@ export const register = mutation({
       registrationDate: Date.now(),
     });
 
-    // Update capacity tracking
-    if (capacityInfo) {
-      await ctx.db.patch(capacityInfo._id, {
-        currentCount: currentCount + 1,
-        lastUpdated: Date.now(),
-      });
-    } else {
-      await ctx.db.insert("capacityTracking", {
-        timeSlotId: args.timeSlotId,
-        currentCount: 1,
-        lastUpdated: Date.now(),
-      });
-    }
+  // No separate capacity tracking updates needed; counts derive from registrations
 
     return {
       registrationId,
@@ -268,19 +254,17 @@ export const registerSelections = mutation({
     // Validate championship slot belongs to championship venue
     const champVenue = await ctx.db.get(selectedChampionshipSlot.venueId);
     if (!champVenue || champVenue.type !== "championship" || !champVenue.isActive) {
-      throw new Error("Selected championship slot is not from the championship venue");
+      throw new Error("Selected championship slot must belong to an active championship venue");
     }
 
-    // Capacity checks for all selected slots
+    // Capacity checks for all selected slots (computed from registrations)
     const allSlots = [...selectedRegularSlots, selectedChampionshipSlot];
     for (const slot of allSlots) {
-      const capacityInfo = await ctx.db
-        .query("capacityTracking")
+      const regs = await ctx.db
+        .query("registrations")
         .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot!._id))
-        .first();
-
-      const currentCount = capacityInfo?.currentCount || 0;
-      if (currentCount >= slot!.capacity) {
+        .collect();
+      if (regs.length >= slot!.capacity) {
         const v = await ctx.db.get(slot!.venueId);
         throw new Error(
           `${v?.name ?? "Venue"} - ${slot!.day} is full (${slot!.capacity}/${slot!.capacity} teams)`
@@ -300,23 +284,7 @@ export const registerSelections = mutation({
         });
         createdIds.push(regId as unknown as string);
 
-        // Update capacity
-        const capacityInfo = await ctx.db
-          .query("capacityTracking")
-          .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot!._id))
-          .first();
-        if (capacityInfo) {
-          await ctx.db.patch(capacityInfo._id, {
-            currentCount: (capacityInfo.currentCount || 0) + 1,
-            lastUpdated: Date.now(),
-          });
-        } else {
-          await ctx.db.insert("capacityTracking", {
-            timeSlotId: slot!._id,
-            currentCount: 1,
-            lastUpdated: Date.now(),
-          });
-        }
+  // No capacityTracking updates; counts derive from registrations
       }
 
       // Championship registration
@@ -328,23 +296,7 @@ export const registerSelections = mutation({
       });
       createdIds.push(champRegId as unknown as string);
 
-      // Update championship capacity
-      const champCapacity = await ctx.db
-        .query("capacityTracking")
-        .withIndex("by_time_slot", (q) => q.eq("timeSlotId", selectedChampionshipSlot._id))
-        .first();
-      if (champCapacity) {
-        await ctx.db.patch(champCapacity._id, {
-          currentCount: (champCapacity.currentCount || 0) + 1,
-          lastUpdated: Date.now(),
-        });
-      } else {
-        await ctx.db.insert("capacityTracking", {
-          timeSlotId: selectedChampionshipSlot._id,
-          currentCount: 1,
-          lastUpdated: Date.now(),
-        });
-      }
+  // No capacityTracking updates; counts derive from registrations
     } catch (e) {
       // Best effort note: Convex doesn't support multi-op rollback here.
       // If needed, admins can clean up partial state.
@@ -357,8 +309,8 @@ export const registerSelections = mutation({
       const v = await ctx.db.get(slot!.venueId);
       summaryParts.push(`${v?.name} - ${slot!.day}`);
     }
-    const champVenueName = (await ctx.db.get(selectedChampionshipSlot.venueId))?.name;
-    summaryParts.push(`${champVenueName} - ${selectedChampionshipSlot.day}`);
+  const champVenueName = (await ctx.db.get(selectedChampionshipSlot.venueId))?.name;
+  summaryParts.push(`${champVenueName} - ${selectedChampionshipSlot.day}`);
 
     return {
       registrationIds: createdIds,

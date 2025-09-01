@@ -7,6 +7,9 @@ export default defineSchema({
     name: v.string(), // "Venue 1", "Venue 2", "Venue 3", "League Championship"
     type: v.union(v.literal("regular"), v.literal("championship")),
     isActive: v.boolean(),
+  location: v.optional(v.string()), // Optional human-readable location (e.g., "Central High School, City, ST")
+  date: v.optional(v.string()), // Optional event date at the venue level (YYYY-MM-DD or ISO string)
+  address: v.optional(v.string()), // Simple free-form address string
   }),
 
   // Available time slots for each venue
@@ -40,7 +43,7 @@ export default defineSchema({
   })
     .index("by_key", ["key"]),
 
-  // Track capacity usage
+  // Track capacity usage (deprecated: capacity now computed directly from registrations)
   capacityTracking: defineTable({
     timeSlotId: v.id("timeSlots"),
     currentCount: v.number(),

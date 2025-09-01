@@ -29,14 +29,23 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <nav className="bg-blue-600 text-white p-4">
+        <nav className="bg-orange-500 text-white p-4">
           <div className="max-w-6xl mx-auto flex justify-center items-center">
             <Link href="/" className="text-xl font-bold hover:text-blue-200">
-              FTC League Selection
+              San Diego FIRST Tech Challenge
             </Link>
           </div>
         </nav>
         <ConvexClientProvider>{children}</ConvexClientProvider>
+        <footer className="bg-slate-100 text-slate-600 p-6 mt-12 flex items-center">
+          <div className=" mx-auto text-center flex flex-row">
+            <p className="text-sm">
+            </p>
+            <Link href="https://edlweiss.me/" className="text-sm hover:underline">
+               Developed by edlweiss.me
+            </Link>
+          </div>
+        </footer>
       </body>
     </html>
   );
