@@ -226,7 +226,7 @@ export default function AdminPageClient() {
                             if (location && (existing as { location?: string }).location !== location) patch.location = location;
                             if (Object.keys(patch).length) await setVenueDetails({ venueId, ...patch });
                           } else {
-                            const created = await createVenueSimple({ name: venueName, address });
+                            const created = await createVenueSimple({ name: venueName, address, type: "championship" });
                             venueId = created._id as Id<"venues">;
                             if (address || location) {
                               await setVenueDetails({ venueId, ...(address ? { address } : {}), ...(location ? { location } : {}) });
@@ -445,6 +445,7 @@ function AddEventForm({
           <input
             value={date}
             onChange={(e) => setDate(e.target.value)}
+            type="date"
             placeholder="YYYY-MM-DD"
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
           />
