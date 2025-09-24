@@ -20,6 +20,7 @@ export default function AdminPageClient() {
   const deleteTimeSlot = useMutation(api.timeSlots.remove);
   const createVenueSimple = useMutation(api.venues.createSimple);
   const deleteVenue = useMutation(api.venues.remove);
+  const removeRegistrationsByTeam = useMutation(api.registrations.removeByTeam);
 
   // Per-venue UX state
   const [savingByVenue, setSavingByVenue] = useState<Record<string, boolean>>({});
@@ -369,7 +370,19 @@ export default function AdminPageClient() {
                       </div>
                       <ExportCsvButton registrations={registrations} />
                     </div>
-                    <CsvTable registrations={registrations} />
+                    <CsvTable
+                      registrations={registrations}
+                      onDeleteTeam={async (teamNumber) => {
+                        const ok = window.confirm(`Delete all registrations for team ${teamNumber}?`);
+                        if (!ok) return;
+                        try {
+                          await removeRegistrationsByTeam({ teamNumber });
+                          router.refresh();
+                        } catch (e: unknown) {
+                          alert(e instanceof Error ? e.message : "Failed to delete registrations");
+                        }
+                      }}
+                    />
                   </div>
                 ),
               },

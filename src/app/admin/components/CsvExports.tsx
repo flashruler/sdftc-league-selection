@@ -11,7 +11,7 @@ export type RegistrationRow = {
   registrationDate: number;
 };
 
-export function CsvTable({ registrations }: { registrations: RegistrationRow[] | undefined }) {
+export function CsvTable({ registrations, onDeleteTeam }: { registrations: RegistrationRow[] | undefined; onDeleteTeam?: (teamNumber: string) => void }) {
   const rows = useMemo(() => buildCsvRows(registrations), [registrations]);
   return (
     <div className="overflow-x-auto">
@@ -23,6 +23,7 @@ export function CsvTable({ registrations }: { registrations: RegistrationRow[] |
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 1 Day</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 2 Day</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 3 Day</th>
+            {onDeleteTeam && <th className="text-left py-4 px-4 font-semibold text-slate-700">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -33,11 +34,21 @@ export function CsvTable({ registrations }: { registrations: RegistrationRow[] |
               <td className="py-4 px-4 text-slate-700">{r.venue1}</td>
               <td className="py-4 px-4 text-slate-700">{r.venue2}</td>
               <td className="py-4 px-4 text-slate-700">{r.venue3}</td>
+              {onDeleteTeam && (
+                <td className="py-4 px-4 text-slate-700">
+                  <button
+                    onClick={() => onDeleteTeam(r.teamNumber)}
+                    className="px-2 py-1 rounded-md border text-xs border-red-300 text-red-700 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={5} className="py-8 px-4 text-center text-slate-500">
+              <td colSpan={onDeleteTeam ? 6 : 5} className="py-8 px-4 text-center text-slate-500">
                 No registrations found
               </td>
             </tr>

@@ -318,3 +318,23 @@ export const registerSelections = mutation({
     };
   },
 });
+
+// Admin: remove all registrations for a team number
+export const removeByTeam = mutation({
+  args: {
+    teamNumber: v.string(),
+  },
+  handler: async (ctx, { teamNumber }) => {
+    const regs = await ctx.db
+      .query("registrations")
+      .withIndex("by_team_number", (q) => q.eq("teamNumber", teamNumber))
+      .collect();
+
+    let removed = 0;
+    for (const r of regs) {
+      await ctx.db.delete(r._id);
+      removed++;
+    }
+    return { removed };
+  },
+});
