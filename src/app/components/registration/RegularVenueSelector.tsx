@@ -40,7 +40,7 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
         const venueName = slots[0]?.venueName ?? "Venue";
         const location = slots[0]?.venueLocation ?? "Unknown Location";
         const address = slots[0]?.venueAddress ?? "";
-        // Compute weekend date range (start + 1 day) using slot.date if present, else venueDate
+        // Compute a base weekend start date for fallback formatting on cards
         const parseDate = (s: string | undefined) => {
           if (!s) return null;
           const d = new Date(s);
@@ -51,22 +51,20 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
           .filter((d): d is Date => d !== null)
           .sort((a, b) => a.getTime() - b.getTime());
         const startDate = slotDates[0] || parseDate(slots[0]?.venueDate);
-        const weekendRange = (() => {
-          if (!startDate) return "";
-          const end = new Date(startDate);
-          end.setDate(end.getDate() + 1);
-          const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-          return `${fmt(startDate)}-${fmt(end)}`;
-        })();
+        const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+        const normalizeDay = (day: string) => {
+          const d = (day || "").toLowerCase();
+          if (d.startsWith("sun")) return "sunday";
+          if (d.startsWith("sat")) return "saturday";
+          if (d === "day 2" || d === "2") return "sunday";
+          if (d === "day 1" || d === "1") return "saturday";
+          return d;
+        };
         const selected = selectedRegular[venueId];
         return (
           <div key={venueId} className="border border-slate-200 rounded-xl p-5">
             <div className="font-semibold text-slate-900 text-xl">{venueName}</div>
-            <div className="">
-              {location}
-              {weekendRange ? <span className="mx-2"> - </span> : null}
-              {weekendRange}
-            </div>
+            <div className="">{location}</div>
             <span className="text-sm text-slate-600">{address}</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {slots.map((slot) => (
@@ -101,7 +99,23 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
                     </div>
                   )}
                   <div className="space-y-2">
-                    <div className="text-slate-700">{slot.day}</div>
+                    <div className="text-slate-700">
+                      {(() => {
+                        // Prefer per-slot date; fall back to startDate + offset by day
+                        let labelDate: string | null = null;
+                        if (slot.date) {
+                          const d = new Date(slot.date);
+                          if (!isNaN(d.getTime())) labelDate = formatMD(d);
+                        }
+                        if (!labelDate && startDate) {
+                          const d = new Date(startDate);
+                          const dayNorm = normalizeDay(slot.day);
+                          if (dayNorm === "sunday") d.setDate(d.getDate() + 1);
+                          labelDate = formatMD(d);
+                        }
+                        return labelDate ? `${slot.day} - ${labelDate}` : slot.day;
+                      })()}
+                    </div>
                     <div className="flex items-center justify-between">
                       <div className={`text-xs font-medium ${slot.isAvailable ? "text-green-600" : "text-red-600"}`}>
                         {slot.isAvailable ? `${slot.spotsRemaining} spots left` : "FULL"}

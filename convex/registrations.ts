@@ -303,18 +303,49 @@ export const registerSelections = mutation({
       throw e;
     }
 
-    // Build a friendly summary
-    const summaryParts: string[] = [];
+    // Build a friendly multi-line summary with dates
+    const parseDate = (s: string | undefined) => {
+      if (!s) return null;
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    };
+    const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+    const normalizeDay = (day: string) => {
+      const d = (day || "").toLowerCase().trim();
+      if (d.startsWith("sun")) return "sunday";
+      if (d.startsWith("sat")) return "saturday";
+      if (d === "day 2" || d === "2") return "sunday";
+      if (d === "day 1" || d === "1") return "saturday";
+      return d;
+    };
+
+  // League (championship) line (champVenue already loaded earlier in this function)
+    const champDate = parseDate(selectedChampionshipSlot.date) || parseDate((champVenue as any)?.date);
+    const lines: string[] = [];
+    lines.push(`Team ${args.teamNumber}`);
+    lines.push(
+      `League Selected: ${champVenue?.name ?? "Championship"} - ${selectedChampionshipSlot.day}` +
+        (champDate ? ` (${formatMD(champDate)})` : "")
+    );
+
+    // Each regular event line with derived date
     for (const slot of selectedRegularSlots) {
       const v = await ctx.db.get(slot!.venueId);
-      summaryParts.push(`${v?.name} - ${slot!.day}`);
+      let dateForSlot = parseDate(slot!.date);
+      if (!dateForSlot) {
+        const venueBase = parseDate((v as any)?.date);
+        if (venueBase) {
+          const d = new Date(venueBase);
+          if (normalizeDay(slot!.day) === "sunday") d.setDate(d.getDate() + 1);
+          dateForSlot = d;
+        }
+      }
+      lines.push(`${v?.name ?? "Venue"} - ${slot!.day}` + (dateForSlot ? ` (${formatMD(dateForSlot)})` : ""));
     }
-  const champVenueName = (await ctx.db.get(selectedChampionshipSlot.venueId))?.name;
-  summaryParts.push(`${champVenueName} - ${selectedChampionshipSlot.day}`);
 
     return {
       registrationIds: createdIds,
-      message: `Team ${args.teamNumber} successfully registered for: ${summaryParts.join(", ")}`,
+      message: lines.join("\n"),
     };
   },
 });
