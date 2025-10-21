@@ -1,5 +1,7 @@
 "use client";
 
+import { parseLocalDate, toLocalTs } from "@/lib/utils";
+
 type Slot = {
   _id: string;
   venueId: string;
@@ -34,14 +36,8 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
   // Build venue list with earliest timestamp for sorting (oldest first)
   const venueList = Object.entries(byVenue)
     .map(([venueId, slots]) => {
-      const toTs = (s?: string) => {
-        if (!s) return Number.NaN;
-        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-        const t = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : Date.parse(s);
-        return isNaN(t) ? Number.NaN : t;
-      };
-      const slotTs = slots.map((s) => toTs(s.date)).filter((t) => !isNaN(t));
-      const venueTs = toTs(slots[0]?.venueDate);
+      const slotTs = slots.map((s) => toLocalTs(s.date)).filter((t) => !isNaN(t));
+      const venueTs = toLocalTs(slots[0]?.venueDate);
       const candidate = slotTs.length ? Math.min(...slotTs) : venueTs;
       const ts = isNaN(candidate) ? Number.MAX_SAFE_INTEGER : candidate;
       const name = slots[0]?.venueName || "";
@@ -57,17 +53,11 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
         const location = ordered[0]?.venueLocation ?? "Unknown Location";
         const address = ordered[0]?.venueAddress ?? "";
         // Compute a base weekend start date for fallback formatting on cards
-        const parseDate = (s: string | undefined) => {
-          if (!s) return null;
-          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-          const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
-          return isNaN(d.getTime()) ? null : d;
-        };
         const slotDates = ordered
-          .map((s) => parseDate(s.date))
+          .map((s) => parseLocalDate(s.date))
           .filter((d): d is Date => d !== null)
           .sort((a, b) => a.getTime() - b.getTime());
-        const startDate = slotDates[0] || parseDate(ordered[0]?.venueDate);
+        const startDate = slotDates[0] || parseLocalDate(ordered[0]?.venueDate);
         const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
         const normalizeDay = (day: string) => {
           const d = (day || "").toLowerCase();
@@ -121,9 +111,8 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
                         // Prefer per-slot date; fall back to startDate + offset by day
                         let labelDate: string | null = null;
                         if (slot.date) {
-                          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(slot.date);
-                          const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(slot.date);
-                          if (!isNaN(d.getTime())) labelDate = formatMD(d);
+                          const d = parseLocalDate(slot.date);
+                          if (d) labelDate = formatMD(d);
                         }
                         if (!labelDate && startDate) {
                           const d = new Date(startDate);

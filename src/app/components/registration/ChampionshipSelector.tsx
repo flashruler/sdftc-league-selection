@@ -1,5 +1,7 @@
 "use client";
 
+import { parseLocalDate, toLocalTs } from "@/lib/utils";
+
 type Slot = {
   _id: string;
   venueId: string;
@@ -29,17 +31,12 @@ export function ChampionshipSelector({ timeSlots, selected, onSelect }: Props) {
 
   // One slot per championship venue (Descartes, Euclid, Gauss, Turing)
   // Sort by earliest date ascending (oldest first)
-  const toTs = (s?: string) => {
-    if (!s) return Number.NaN;
-    const t = Date.parse(s);
-    return isNaN(t) ? Number.NaN : t;
-  };
   const champsSorted = [...champSlots]
     .map((s) => {
-      const ts = !isNaN(toTs(s.date))
-        ? toTs(s.date)
-        : !isNaN(toTs(s.venueDate))
-        ? toTs(s.venueDate)
+      const ts = !isNaN(toLocalTs(s.date))
+        ? toLocalTs(s.date)
+        : !isNaN(toLocalTs(s.venueDate))
+        ? toLocalTs(s.venueDate)
         : Number.MAX_SAFE_INTEGER;
       return { s, ts };
     })
@@ -85,8 +82,8 @@ export function ChampionshipSelector({ timeSlots, selected, onSelect }: Props) {
                 <div className="text-xl font-semibold">{slot.venueName}</div>
                 {(() => {
                   const formatShortDate = (s: string) => {
-                    const d = new Date(s);
-                    if (isNaN(d.getTime())) return s; // fallback to raw if not parseable
+                    const d = parseLocalDate(s);
+                    if (!d) return s; // fallback to raw if not parseable
                     return `${d.getMonth() + 1}/${d.getDate()}`;
                   };
                   const chosenDate = slot.date || slot.venueDate;
