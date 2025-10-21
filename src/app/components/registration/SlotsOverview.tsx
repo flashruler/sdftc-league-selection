@@ -66,6 +66,24 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
     return d;
   };
 
+  // Championships sorted by earliest date (oldest first), then by name
+  const toTs = (s?: string) => {
+    if (!s) return Number.NaN;
+    const t = Date.parse(s);
+    return isNaN(t) ? Number.NaN : t;
+  };
+  const champsSorted = [...champs]
+    .map((s) => {
+      const tsCandidate = !isNaN(toTs(s.date))
+        ? toTs(s.date)
+        : !isNaN(toTs(s.venueDate))
+        ? toTs(s.venueDate)
+        : Number.MAX_SAFE_INTEGER;
+      return { s, tsCandidate };
+    })
+    .sort((a, b) => (a.tsCandidate - b.tsCandidate) || a.s.venueName.localeCompare(b.s.venueName))
+    .map((x) => x.s);
+
   return (
     <div className="space-y-8">
       {/* Championships */}
@@ -81,10 +99,8 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
             
           </div>
         </div>
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {champs
-            .sort((a, b) => a.venueName.localeCompare(b.venueName))
-            .map((slot) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {champsSorted.map((slot) => {
               const dateLabel = formatMD(slot.date) || formatMD(slot.venueDate) || slot.day;
               return (
                 <div
