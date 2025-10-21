@@ -36,7 +36,8 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
     .map(([venueId, slots]) => {
       const toTs = (s?: string) => {
         if (!s) return Number.NaN;
-        const t = Date.parse(s);
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+        const t = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : Date.parse(s);
         return isNaN(t) ? Number.NaN : t;
       };
       const slotTs = slots.map((s) => toTs(s.date)).filter((t) => !isNaN(t));
@@ -58,7 +59,8 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
         // Compute a base weekend start date for fallback formatting on cards
         const parseDate = (s: string | undefined) => {
           if (!s) return null;
-          const d = new Date(s);
+          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+          const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
           return isNaN(d.getTime()) ? null : d;
         };
         const slotDates = ordered
@@ -119,7 +121,8 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
                         // Prefer per-slot date; fall back to startDate + offset by day
                         let labelDate: string | null = null;
                         if (slot.date) {
-                          const d = new Date(slot.date);
+                          const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(slot.date);
+                          const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(slot.date);
                           if (!isNaN(d.getTime())) labelDate = formatMD(d);
                         }
                         if (!labelDate && startDate) {

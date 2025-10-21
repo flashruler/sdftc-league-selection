@@ -35,7 +35,9 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
     .map(([venueId, slots]) => {
       const toTs = (s?: string) => {
         if (!s) return Number.NaN;
-        const t = Date.parse(s);
+        // Use local parsing for YYYY-MM-DD to avoid UTC shift
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+        const t = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : Date.parse(s);
         return isNaN(t) ? Number.NaN : t;
       };
       const slotTimestamps = slots.map((s) => toTs(s.date)).filter((t) => !isNaN(t));
@@ -49,7 +51,8 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
 
   const formatMD = (dateStr: string | undefined) => {
     if (!dateStr) return null;
-    const d = new Date(dateStr);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+    const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(dateStr);
     if (isNaN(d.getTime())) return null;
     return `${d.toLocaleString(undefined, { month: "short" })} ${d.getDate()}`;
   };
@@ -145,7 +148,8 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
             // Compute weekend start for fallback day labels
             const parseDate = (s?: string) => {
               if (!s) return null;
-              const d = new Date(s);
+              const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+              const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
               return isNaN(d.getTime()) ? null : d;
             };
             const slotDates = slots
