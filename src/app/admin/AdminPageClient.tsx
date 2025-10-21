@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { VenueDetailsCard } from "./components/VenueDetailsCard";
 import { CsvTable, ExportCsvButton } from "./components/CsvExports";
 import { Tabs } from "./components/Tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AdminSidebar, type AdminSection } from "./components/AdminSidebar";
 
 export default function AdminPageClient() {
   const router = useRouter();
@@ -21,6 +23,7 @@ export default function AdminPageClient() {
   const createVenueSimple = useMutation(api.venues.createSimple);
   const deleteVenue = useMutation(api.venues.remove);
   const removeRegistrationsByTeam = useMutation(api.registrations.removeByTeam);
+  const setVenueCapacityAll = useMutation(api.timeSlots.setCapacityForVenue);
 
   // Per-venue UX state
   const [savingByVenue, setSavingByVenue] = useState<Record<string, boolean>>({});
@@ -29,33 +32,82 @@ export default function AdminPageClient() {
 
   // (Initial setup handled elsewhere; no-op here)
 
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50">
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={async () => {
-                await fetch("/api/admin/logout", { method: "POST" });
-                router.replace("/admin/login");
-                router.refresh();
-              }}
-              className="px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
-            >
-              Sign out
-            </button>
-          </div>
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4 leading-tight">
-              FTC League Selection
-            </h1>
-            <p className="text-lg text-slate-600 max-w-lg mx-auto">
-              Administrative controls and registration management
-            </p>
-          </div>
+  const [section, setSection] = useState<AdminSection>("capacity");
 
-          <Tabs
+  // KPI metrics
+  const uniqueTeams = new Set((registrations ?? []).map((r) => r.teamNumber)).size;
+  const activeSlots = (timeSlots ?? []).filter((s) => s.isActive);
+  const totalCapacity = activeSlots.reduce((sum, s) => sum + s.capacity, 0);
+  const totalRegistered = activeSlots.reduce((sum, s) => sum + s.currentCount, 0);
+  const utilization = totalCapacity > 0 ? Math.round((totalRegistered / totalCapacity) * 100) : 0;
+
+  return (
+    <main className="min-h-screen bg-background">
+      <div className="mx-auto max-w-[1400px]">
+        <div className="flex min-h-screen">
+          <AdminSidebar active={section} onChange={setSection} />
+          <div className="flex-1 px-4 md:px-8 py-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">FTC League Selection</h1>
+                <p className="text-muted-foreground text-sm">Administrative controls and registration management</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    await fetch("/api/admin/logout", { method: "POST" });
+                    router.replace("/admin/login");
+                    router.refresh();
+                  }}
+                  className="px-3 py-2 text-sm rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+
+            {/* KPI cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Total Teams</CardTitle>
+                  <CardDescription>Registered teams</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{uniqueTeams}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Active Events</CardTitle>
+                  <CardDescription>Events with open slots</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{activeSlots.length}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Total Registered vs Total Capacity</CardTitle>
+                  <CardDescription>
+                    {totalRegistered}/{totalCapacity}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{utilization}%</div>
+                </CardContent>
+              </Card>
+              {/* <Card>
+                <CardHeader>
+                  <CardTitle>Championships</CardTitle>
+                  <CardDescription>Unique championship venues</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">{new Set((timeSlots ?? []).filter(s=>s.venueType==="championship").map(s=>String(s.venueId))).size}</div>
+                </CardContent>
+              </Card> */}
+            </div>
+            <Tabs
             items={[
               {
                 id: "capacity",
@@ -88,8 +140,9 @@ export default function AdminPageClient() {
                                 {slot.currentCount}/{slot.capacity}
                               </span>
                               <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${slot.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                                  }`}
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  slot.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                                }`}
                               >
                                 {slot.isAvailable ? "Available" : "Full"}
                               </span>
@@ -145,11 +198,14 @@ export default function AdminPageClient() {
                             saving={!!savingByVenue[id]}
                             saved={!!savedAtByVenue[id] && !savingByVenue[id] && !errorByVenue[id]}
                             error={errorByVenue[id]}
-                            onSave={async ({ location, date, address }) => {
+                            onSave={async ({ name, location, date, address, capacityAllSlots }) => {
                               setErrorByVenue((prev) => ({ ...prev, [id]: null }));
                               setSavingByVenue((prev) => ({ ...prev, [id]: true }));
                               try {
-                                await setVenueDetails({ venueId: venue._id, location, date, address });
+                                await setVenueDetails({ venueId: venue._id, name, location, date, address });
+                                if (typeof capacityAllSlots === "number") {
+                                  await setVenueCapacityAll({ venueId: venue._id as Id<"venues">, capacity: capacityAllSlots });
+                                }
                                 setSavedAtByVenue((prev) => ({ ...prev, [id]: Date.now() }));
                                 setTimeout(() => {
                                   setSavedAtByVenue((prev) => {
@@ -388,7 +444,11 @@ export default function AdminPageClient() {
               },
             ]}
             initialId="capacity"
+            activeId={section}
+            onChange={(id) => setSection(id as AdminSection)}
+            hideHeader
           />
+          </div>
         </div>
       </div>
     </main>

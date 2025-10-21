@@ -215,14 +215,16 @@ export const setLocation = mutation({
 export const setDetails = mutation({
   args: {
     venueId: v.id("venues"),
+    name: v.optional(v.string()),
     location: v.optional(v.string()),
     date: v.optional(v.string()),
     address: v.optional(v.string()),
   },
-  handler: async (ctx, { venueId, location, date, address }) => {
+  handler: async (ctx, { venueId, name, location, date, address }) => {
     const venue = await ctx.db.get(venueId);
     if (!venue) throw new Error("Venue not found");
     const patch: any = {};
+    if (typeof name !== "undefined") patch.name = name;
     if (typeof location !== "undefined") patch.location = location;
     if (typeof date !== "undefined") patch.date = date;
     if (typeof address !== "undefined") patch.address = address;

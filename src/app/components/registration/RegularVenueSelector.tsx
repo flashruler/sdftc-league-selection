@@ -31,26 +31,41 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
     acc[key].push(s);
     return acc;
   }, {});
-  const venueOrder = Object.keys(byVenue);
+  // Build venue list with earliest timestamp for sorting (oldest first)
+  const venueList = Object.entries(byVenue)
+    .map(([venueId, slots]) => {
+      const toTs = (s?: string) => {
+        if (!s) return Number.NaN;
+        const t = Date.parse(s);
+        return isNaN(t) ? Number.NaN : t;
+      };
+      const slotTs = slots.map((s) => toTs(s.date)).filter((t) => !isNaN(t));
+      const venueTs = toTs(slots[0]?.venueDate);
+      const candidate = slotTs.length ? Math.min(...slotTs) : venueTs;
+      const ts = isNaN(candidate) ? Number.MAX_SAFE_INTEGER : candidate;
+      const name = slots[0]?.venueName || "";
+      return { venueId, slots, ts, name };
+    })
+    .sort((a, b) => (a.ts - b.ts) || a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-6">
-      {venueOrder.map((venueId) => {
-        const slots = byVenue[venueId].sort((a, b) => a.day.localeCompare(b.day));
-        const venueName = slots[0]?.venueName ?? "Venue";
-        const location = slots[0]?.venueLocation ?? "Unknown Location";
-        const address = slots[0]?.venueAddress ?? "";
+      {venueList.map(({ venueId, slots }) => {
+        const ordered = [...slots].sort((a, b) => a.day.localeCompare(b.day));
+        const venueName = ordered[0]?.venueName ?? "Venue";
+        const location = ordered[0]?.venueLocation ?? "Unknown Location";
+        const address = ordered[0]?.venueAddress ?? "";
         // Compute a base weekend start date for fallback formatting on cards
         const parseDate = (s: string | undefined) => {
           if (!s) return null;
           const d = new Date(s);
           return isNaN(d.getTime()) ? null : d;
         };
-        const slotDates = slots
+        const slotDates = ordered
           .map((s) => parseDate(s.date))
           .filter((d): d is Date => d !== null)
           .sort((a, b) => a.getTime() - b.getTime());
-        const startDate = slotDates[0] || parseDate(slots[0]?.venueDate);
+        const startDate = slotDates[0] || parseDate(ordered[0]?.venueDate);
         const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
         const normalizeDay = (day: string) => {
           const d = (day || "").toLowerCase();
@@ -67,7 +82,7 @@ export function RegularVenueSelector({ timeSlots, selectedRegular, onSelect }: P
             <div className="">{location}</div>
             <span className="text-sm text-slate-600">{address}</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {slots.map((slot) => (
+              {ordered.map((slot) => (
                 <label
                   key={slot._id}
                   className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${

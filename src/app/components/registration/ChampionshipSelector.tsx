@@ -28,13 +28,28 @@ export function ChampionshipSelector({ timeSlots, selected, onSelect }: Props) {
   if (champSlots.length === 0) return null;
 
   // One slot per championship venue (Descartes, Euclid, Gauss, Turing)
+  // Sort by earliest date ascending (oldest first)
+  const toTs = (s?: string) => {
+    if (!s) return Number.NaN;
+    const t = Date.parse(s);
+    return isNaN(t) ? Number.NaN : t;
+  };
+  const champsSorted = [...champSlots]
+    .map((s) => {
+      const ts = !isNaN(toTs(s.date))
+        ? toTs(s.date)
+        : !isNaN(toTs(s.venueDate))
+        ? toTs(s.venueDate)
+        : Number.MAX_SAFE_INTEGER;
+      return { s, ts };
+    })
+    .sort((a, b) => (a.ts - b.ts) || a.s.venueName.localeCompare(b.s.venueName))
+    .map((x) => x.s);
   return (
     <div className="border border-slate-200 rounded-xl p-5">
       <div className="mb-3 font-semibold text-slate-900">Please select a league:</div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {champSlots
-          .sort((a, b) => a.venueName.localeCompare(b.venueName))
-          .map((slot) => (
+        {champsSorted.map((slot) => (
             <label
               key={slot._id}
               className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all ${

@@ -215,3 +215,24 @@ export const remove = mutation({
     return { message: "Deleted" };
   },
 });
+
+// Bulk update: set capacity for all time slots for a given venue
+export const setCapacityForVenue = mutation({
+  args: {
+    venueId: v.id("venues"),
+    capacity: v.number(),
+  },
+  handler: async (ctx, { venueId, capacity }) => {
+    if (capacity <= 0) throw new Error("Capacity must be greater than 0");
+    const slots = await ctx.db
+      .query("timeSlots")
+      .withIndex("by_venue", (q) => q.eq("venueId", venueId))
+      .collect();
+    let updated = 0;
+    for (const s of slots) {
+      await ctx.db.patch(s._id, { capacity });
+      updated++;
+    }
+    return { updated };
+  },
+});
