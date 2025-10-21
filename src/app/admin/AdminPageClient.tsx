@@ -86,7 +86,7 @@ export default function AdminPageClient() {
                   <div className="text-3xl font-bold">{activeSlots.length}</div>
                 </CardContent>
               </Card>
-              <Card>
+              {/* <Card>
                 <CardHeader>
                   <CardTitle>Total Registered vs Total Capacity</CardTitle>
                   <CardDescription>
@@ -96,7 +96,7 @@ export default function AdminPageClient() {
                 <CardContent>
                   <div className="text-3xl font-bold">{utilization}%</div>
                 </CardContent>
-              </Card>
+              </Card> */}
               {/* <Card>
                 <CardHeader>
                   <CardTitle>Championships</CardTitle>
