@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { parseLocalDate } from "@/lib/utils";
 
 export type RegistrationRow = {
   _id: string;
@@ -8,6 +9,8 @@ export type RegistrationRow = {
   venueName?: string;
   venueType?: string;
   day?: string;
+  date?: string; // time slot specific date if present (YYYY-MM-DD)
+  venueDate?: string; // base weekend date for the venue (YYYY-MM-DD)
   registrationDate: number;
 };
 
@@ -108,6 +111,16 @@ function buildCsvRows(registrations: RegistrationRow[] | undefined) {
     { league: string; regular: Record<string, string> }
   >();
 
+  const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const normalizeDay = (day?: string) => {
+    const d = (day || "").toLowerCase().trim();
+    if (d.startsWith("sun")) return "sunday";
+    if (d.startsWith("sat")) return "saturday";
+    if (d === "day 2" || d === "2") return "sunday";
+    if (d === "day 1" || d === "1") return "saturday";
+    return d;
+  };
+
   for (const r of registrations) {
     const t = r.teamNumber;
     const entry = byTeam.get(t) || { league: "", regular: {} };
@@ -115,7 +128,21 @@ function buildCsvRows(registrations: RegistrationRow[] | undefined) {
       entry.league = r.venueName || "";
     } else if (r.venueType === "regular") {
       const venue = r.venueName || "";
-      if (venue && r.day) entry.regular[venue] = r.day;
+      if (venue && r.day) {
+        // Build label like "Saturday - 10/21" using slot date or venue base date
+        let label = r.day;
+        let d = parseLocalDate(r.date);
+        if (!d) {
+          const base = parseLocalDate(r.venueDate);
+          if (base) {
+            const adj = new Date(base);
+            if (normalizeDay(r.day) === "sunday") adj.setDate(adj.getDate() + 1);
+            d = adj;
+          }
+        }
+        if (d) label = `${r.day} - ${formatMD(d)}`;
+        entry.regular[venue] = label;
+      }
     }
     byTeam.set(t, entry);
   }

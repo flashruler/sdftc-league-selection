@@ -67,6 +67,8 @@ export const getAll = query({
         venueName: venue?.name,
     venueType: venue?.type,
         day: timeSlot?.day,
+        date: (timeSlot as any)?.date,
+        venueDate: (venue as any)?.date,
         registrationDateFormatted: new Date(registration.registrationDate).toLocaleString(),
       });
     }
