@@ -21,6 +21,7 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
       <table className="w-full">
         <thead>
           <tr className="border-b border-slate-200">
+            <th className="text-left py-4 px-4 font-semibold text-slate-700">Submitted</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Team Number</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">League</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 1 Day</th>
@@ -32,6 +33,7 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
         <tbody>
           {rows.map((r) => (
             <tr key={r.teamNumber} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <td className="py-4 px-4 text-slate-600 whitespace-nowrap">{r.submitted}</td>
               <td className="py-4 px-4 font-medium text-slate-900">{r.teamNumber}</td>
               <td className="py-4 px-4 text-slate-700">{r.league}</td>
               <td className="py-4 px-4 text-slate-700">{r.venue1}</td>
@@ -51,7 +53,7 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={onDeleteTeam ? 6 : 5} className="py-8 px-4 text-center text-slate-500">
+              <td colSpan={onDeleteTeam ? 7 : 6} className="py-8 px-4 text-center text-slate-500">
                 No registrations found
               </td>
             </tr>
@@ -65,10 +67,10 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
 export function ExportCsvButton({ registrations }: { registrations: RegistrationRow[] | undefined }) {
   const rows = useMemo(() => buildCsvRows(registrations), [registrations]);
   const onExport = () => {
-    const header = ["Team Number", "League", "Venue 1 Day", "Venue 2 Day", "Venue 3 Day"];
+    const header = ["Submitted", "Team Number", "League", "Venue 1 Day", "Venue 2 Day", "Venue 3 Day"];
     const lines = [header.join(",")];
     for (const r of rows) {
-      const row = [r.teamNumber, r.league, r.venue1, r.venue2, r.venue3].map((v) => csvSafe(v));
+      const row = [r.submitted, r.teamNumber, r.league, r.venue1, r.venue2, r.venue3].map((v) => csvSafe(v));
       lines.push(row.join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -95,21 +97,28 @@ export function ExportCsvButton({ registrations }: { registrations: Registration
 }
 
 function buildCsvRows(registrations: RegistrationRow[] | undefined) {
-  if (!registrations || registrations.length === 0) return [] as Array<{ teamNumber: string; league: string; venue1: string; venue2: string; venue3: string }>;
+  if (!registrations || registrations.length === 0)
+    return [] as Array<{ submitted: string; teamNumber: string; league: string; venue1: string; venue2: string; venue3: string }>;
 
   // Determine the three regular venues sorted by name to map into columns 1-3
   const regularVenueNames = Array.from(
-    new Set(
-      registrations.filter((r) => r.venueType === "regular").map((r) => r.venueName || "")
-    )
+    new Set(registrations.filter((r) => r.venueType === "regular").map((r) => r.venueName || ""))
   )
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
 
-  const byTeam = new Map<
-    string,
-    { league: string; regular: Record<string, string> }
-  >();
+  const byTeam = new Map<string, { league: string; regular: Record<string, string>; submittedAt: number | null }>();
+
+  // Pacific time formatter (no seconds). Removed zone signifier.
+  const pacificFmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 
   const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
   const normalizeDay = (day?: string) => {
@@ -123,7 +132,11 @@ function buildCsvRows(registrations: RegistrationRow[] | undefined) {
 
   for (const r of registrations) {
     const t = r.teamNumber;
-    const entry = byTeam.get(t) || { league: "", regular: {} };
+    const entry = byTeam.get(t) || { league: "", regular: {}, submittedAt: null };
+    // Track earliest registrationDate for this team
+    if (typeof r.registrationDate === "number") {
+      entry.submittedAt = entry.submittedAt === null ? r.registrationDate : Math.min(entry.submittedAt, r.registrationDate);
+    }
     if (r.venueType === "championship") {
       entry.league = r.venueName || "";
     } else if (r.venueType === "regular") {
@@ -150,12 +163,13 @@ function buildCsvRows(registrations: RegistrationRow[] | undefined) {
   // Guarantee three columns: map by the first three discovered venue names or blanks
   const firstThree = [regularVenueNames[0], regularVenueNames[1], regularVenueNames[2]];
 
-  const rows: Array<{ teamNumber: string; league: string; venue1: string; venue2: string; venue3: string }> = [];
-  for (const [teamNumber, { league, regular }] of byTeam.entries()) {
+  const rows: Array<{ submitted: string; teamNumber: string; league: string; venue1: string; venue2: string; venue3: string }> = [];
+  for (const [teamNumber, { league, regular, submittedAt }] of byTeam.entries()) {
     const venue1 = (firstThree[0] && regular[firstThree[0]]) || "";
     const venue2 = (firstThree[1] && regular[firstThree[1]]) || "";
     const venue3 = (firstThree[2] && regular[firstThree[2]]) || "";
-    rows.push({ teamNumber, league, venue1, venue2, venue3 });
+    const submitted = submittedAt ? pacificFmt.format(new Date(submittedAt)) : "";
+    rows.push({ submitted, teamNumber, league, venue1, venue2, venue3 });
   }
 
   // Sort rows by team number ascending numeric-ish

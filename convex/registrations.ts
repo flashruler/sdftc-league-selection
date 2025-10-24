@@ -196,6 +196,9 @@ export const registerSelections = mutation({
       throw new Error("Registration is currently closed");
     }
 
+    // Single global timestamp for this team's submission
+    const submittedAt = now;
+
     // Ensure this team hasn't already registered anything (one-shot registration flow)
     const existingAny = await ctx.db
       .query("registrations")
@@ -276,7 +279,7 @@ export const registerSelections = mutation({
       }
     }
 
-    // At this point, attempt to create registrations and update capacity
+    // At this point, attempt to create registrations
     const createdIds: string[] = [];
     try {
       for (const slot of selectedRegularSlots) {
@@ -284,11 +287,9 @@ export const registerSelections = mutation({
           teamNumber: args.teamNumber,
           venueId: slot!.venueId,
           timeSlotId: slot!._id,
-          registrationDate: Date.now(),
+          registrationDate: submittedAt,
         });
         createdIds.push(regId as unknown as string);
-
-  // No capacityTracking updates; counts derive from registrations
       }
 
       // Championship registration
@@ -296,14 +297,10 @@ export const registerSelections = mutation({
         teamNumber: args.teamNumber,
         venueId: selectedChampionshipSlot.venueId,
         timeSlotId: selectedChampionshipSlot._id,
-        registrationDate: Date.now(),
+        registrationDate: submittedAt,
       });
       createdIds.push(champRegId as unknown as string);
-
-  // No capacityTracking updates; counts derive from registrations
     } catch (e) {
-      // Best effort note: Convex doesn't support multi-op rollback here.
-      // If needed, admins can clean up partial state.
       throw e;
     }
 
