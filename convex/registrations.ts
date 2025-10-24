@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 // Check if registration is currently open
 export const isRegistrationOpen = query({
@@ -67,8 +68,8 @@ export const getAll = query({
         venueName: venue?.name,
     venueType: venue?.type,
         day: timeSlot?.day,
-        date: (timeSlot as any)?.date,
-        venueDate: (venue as any)?.date,
+        date: (timeSlot as unknown as { date?: string })?.date,
+        venueDate: (venue as unknown as { date?: string })?.date,
         registrationDateFormatted: new Date(registration.registrationDate).toLocaleString(),
       });
     }
@@ -173,6 +174,7 @@ export const registerSelections = mutation({
       regular: v.array(v.id("timeSlots")), // expected length: number of active regular venues (typically 3)
       championship: v.id("timeSlots"),
     }),
+    email: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Registration window checks
@@ -321,8 +323,8 @@ export const registerSelections = mutation({
       return d;
     };
 
-  // League (championship) line (champVenue already loaded earlier in this function)
-    const champDate = parseDate(selectedChampionshipSlot.date) || parseDate((champVenue as any)?.date);
+    // League (championship) line (champVenue already loaded earlier in this function)
+    const champDate = parseDate(selectedChampionshipSlot.date) || parseDate((champVenue as unknown as { date?: string })?.date);
     const lines: string[] = [];
     lines.push(`Team ${args.teamNumber}`);
     lines.push(
@@ -335,7 +337,7 @@ export const registerSelections = mutation({
       const v = await ctx.db.get(slot!.venueId);
       let dateForSlot = parseDate(slot!.date);
       if (!dateForSlot) {
-        const venueBase = parseDate((v as any)?.date);
+        const venueBase = parseDate((v as unknown as { date?: string })?.date);
         if (venueBase) {
           const d = new Date(venueBase);
           if (normalizeDay(slot!.day) === "sunday") d.setDate(d.getDate() + 1);
@@ -344,13 +346,41 @@ export const registerSelections = mutation({
       }
       lines.push(`${v?.name ?? "Venue"} - ${slot!.day}` + (dateForSlot ? ` (${formatMD(dateForSlot)})` : ""));
     }
-
-    return {
-      registrationIds: createdIds,
-      message: lines.join("\n"),
-    };
-  },
-});
+ 
+     const message = lines.join("\n");
+     // Build HTML body
+     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+     const itemsHtml = lines.map((l) => `<li>${esc(l)}</li>`).join("");
+     const html = `<!doctype html>
+      <html>
+        <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#f6f7f9; padding:24px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px; margin:auto; background:#ffffff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+            <tr>
+              <td style="padding:24px;">
+                <h2 style="margin:0 0 12px; color:#0f172a;">Registration Confirmation</h2>
+                <p style="margin:0 0 16px; color:#334155;">Thank you for submitting your selections. Below is a copy of your submission:</p>
+                <ul style="margin:0; padding-left:18px; color:#0f172a; line-height:1.5;">${itemsHtml}</ul>
+                <p style="margin:16px 0 0; color:#64748b; font-size:12px;">This is an automated message. Please keep for your records.</p>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>`;
+     if (args.email) {
+       await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, {
+         to: args.email,
+         subject: `Registration Confirmation - Team ${args.teamNumber}`,
+         text: message,
+         html,
+       });
+     }
+ 
+     return {
+       registrationIds: createdIds,
+       message,
+     };
+   },
+ });
 
 // Admin: remove all registrations for a team number
 export const removeByTeam = mutation({

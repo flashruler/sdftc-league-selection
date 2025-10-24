@@ -19,6 +19,9 @@ export default function Home() {
   // Selected championship timeSlotId
   const [selectedChampionship, setSelectedChampionship] = useState<string>("");
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+  // Optional confirmation email
+  const [wantsEmail, setWantsEmail] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
 
   const timeSlots = useQuery(api.timeSlots.getAvailable);
   const registrationStatus = useQuery(api.registrations.isRegistrationOpen);
@@ -35,6 +38,8 @@ export default function Home() {
     setShowRegistrationForm(false);
     setSelectedRegular({});
     setSelectedChampionship("");
+    setWantsEmail(false);
+    setConfirmEmail("");
   };
 
   const handleProceed = () => {
@@ -72,6 +77,7 @@ export default function Home() {
           regular: selectedRegularIds as unknown as Id<"timeSlots">[],
           championship: selectedChampionship as unknown as Id<"timeSlots">,
         },
+        ...(wantsEmail && confirmEmail ? { email: confirmEmail.trim() } : {}),
       });
 
       alert(result.message);
@@ -80,6 +86,8 @@ export default function Home() {
       setSelectedRegular({});
       setSelectedChampionship("");
       setShowRegistrationForm(false);
+      setWantsEmail(false);
+      setConfirmEmail("");
     } catch (error) {
       alert(`Error: ${error}`);
     }
@@ -156,6 +164,31 @@ export default function Home() {
                   selectedRegular={selectedRegular}
                   onSelect={(venueId, slotId) => setSelectedRegular((prev) => ({ ...prev, [venueId]: slotId }))}
                 />
+
+                {/* Optional confirmation email */}
+                <div className="mt-2 space-y-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={wantsEmail}
+                      onChange={(e) => setWantsEmail(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                    <span className="text-slate-700">Email me a confirmation receipt</span>
+                  </label>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    placeholder="coach@example.org"
+                    value={confirmEmail}
+                    onChange={(e) => setConfirmEmail(e.target.value)}
+                    disabled={!wantsEmail}
+                    className={`w-full rounded-lg border px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      wantsEmail ? "border-slate-300" : "border-slate-200 bg-slate-50 text-slate-400"
+                    }`}
+                  />
+                  <p className="text-xs text-slate-500">Optional. We’ll send your selections to this address.</p>
+                </div>
 
                 <button
                   type="submit"
