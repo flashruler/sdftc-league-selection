@@ -1,5 +1,7 @@
 "use client";
 
+import { LeagueCapacity, LeagueEvents, LeagueHeader, leagueTheme, type LeagueSlot } from "./LeagueEvents";
+
 type Slot = {
   _id: string;
   venueId: string;
@@ -7,6 +9,7 @@ type Slot = {
   venueLocation?: string;
   venueDate?: string;
   venueAddress?: string;
+  meet1?: LeagueSlot["meet1"];
   venueType: string;
   day: string;
   date?: string;
@@ -88,53 +91,23 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
     <div className="space-y-8">
       {/* Championships */}
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 21h8M12 17l-5-5 1.5-1.5L12 14l5.5-5.5L19 10l-7 7z" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">League Championships</h2>
-            
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {champsSorted.map((slot) => {
-              const dateLabel = formatMD(slot.date) || formatMD(slot.venueDate) || slot.day;
-              return (
-                <div
-                  key={slot._id}
-                  className={`border-2 rounded-xl p-5 transition-all ${
-                    slot.isAvailable ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="text-xl font-semibold text-slate-900">{slot.venueName}</div>
-                    <div className="text-slate-800">{slot.venueLocation || slot.venueName} · {dateLabel}</div>
-                    <div className="text-slate-500 text-sm">{slot.venueAddress}</div>
-                    <div className="flex items-center justify-between pt-1">
-                      <span className={`text-sm font-medium ${slot.isAvailable ? "text-green-700" : "text-red-700"}`}>
-                        {slot.currentCount}/{slot.capacity} teams
-                      </span>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          slot.isAvailable ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {slot.isAvailable ? "Available" : "Full"}
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${slot.isAvailable ? "bg-green-500" : "bg-red-500"}`}
-                        style={{ width: `${slot.capacity ? (slot.currentCount / slot.capacity) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        <h2 className="text-xl font-semibold text-slate-900 mb-6">Select a League to Compete In:</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {champsSorted.map((slot) => (
+            <div
+              key={slot._id}
+              className={`relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 pt-6 shadow-sm transition-shadow hover:shadow-md ${
+                slot.isAvailable ? "" : "opacity-60"
+              }`}
+            >
+              <div className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${leagueTheme(slot.venueName).bar}`} />
+              <div className="space-y-4">
+                <LeagueHeader name={slot.venueName} />
+                <LeagueEvents name={slot.venueName} slot={slot} />
+                <LeagueCapacity {...slot} />
+              </div>
+            </div>
+          ))}
           {champs.length === 0 && (
             <div className="text-sm text-slate-500">No championship events available.</div>
           )}
@@ -143,17 +116,7 @@ export function SlotsOverview({ timeSlots }: { timeSlots: Slot[] | undefined }) 
 
       {/* League Meets */}
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">League Meets</h2>
-
-          </div>
-        </div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-6">Select Your Dates for Meets 2 and 3:</h2>
 
         <div className="space-y-4">
           {venueEntries.map(({ venueId, slots }) => {

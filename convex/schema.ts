@@ -5,11 +5,13 @@ export default defineSchema({
   // Venue definitions with capacity limits
   venues: defineTable({
     name: v.string(), // "Venue 1", "Venue 2", "Venue 3", "League Championship"
-    type: v.union(v.literal("regular"), v.literal("championship")),
+    // regular = meets 2/3 (team picks a day); championship = a league; meet1 = a league's Meet 1
+    type: v.union(v.literal("regular"), v.literal("championship"), v.literal("meet1")),
     isActive: v.boolean(),
   location: v.optional(v.string()), // Optional human-readable location (e.g., "Central High School, City, ST")
   date: v.optional(v.string()), // Optional event date at the venue level (YYYY-MM-DD or ISO string)
   address: v.optional(v.string()), // Simple free-form address string
+  leagueId: v.optional(v.id("venues")), // meet1 venues only: the championship venue (league) it belongs to
   }),
 
   // Available time slots for each venue

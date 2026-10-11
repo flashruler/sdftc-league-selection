@@ -11,6 +11,7 @@ import { RegularVenueSelector } from "./components/registration/RegularVenueSele
 import { ChampionshipSelector } from "./components/registration/ChampionshipSelector";
 import { SlotsOverview } from "./components/registration/SlotsOverview";
 import { RegistrationClosedCard } from "./components/registration/RegistrationClosedCard";
+import { ConfirmationDialog, type RegistrationSummary } from "./components/registration/ConfirmationDialog";
 
 export default function Home() {
   const [teamNumber, setTeamNumber] = useState("");
@@ -19,9 +20,10 @@ export default function Home() {
   // Selected championship timeSlotId
   const [selectedChampionship, setSelectedChampionship] = useState<string>("");
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
-  // Optional confirmation email
-  const [wantsEmail, setWantsEmail] = useState(false);
+  // Required confirmation email
   const [confirmEmail, setConfirmEmail] = useState("");
+  const [confirmation, setConfirmation] = useState<RegistrationSummary | null>(null);
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(confirmEmail.trim());
 
   const timeSlots = useQuery(api.timeSlots.getAvailable);
   const registrationStatus = useQuery(api.registrations.isRegistrationOpen);
@@ -38,7 +40,6 @@ export default function Home() {
     setShowRegistrationForm(false);
     setSelectedRegular({});
     setSelectedChampionship("");
-    setWantsEmail(false);
     setConfirmEmail("");
   };
 
@@ -50,7 +51,7 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teamNumber) return;
+    if (!teamNumber || !isValidEmail) return;
 
     // Build selection payload
     if (!timeSlots) return;
@@ -77,16 +78,15 @@ export default function Home() {
           regular: selectedRegularIds as unknown as Id<"timeSlots">[],
           championship: selectedChampionship as unknown as Id<"timeSlots">,
         },
-        ...(wantsEmail && confirmEmail ? { email: confirmEmail.trim() } : {}),
+        email: confirmEmail.trim(),
       });
 
-      alert(result.message);
+      setConfirmation(result.summary);
       // Reset form
       setTeamNumber("");
       setSelectedRegular({});
       setSelectedChampionship("");
       setShowRegistrationForm(false);
-      setWantsEmail(false);
       setConfirmEmail("");
     } catch (error) {
       alert(`Error: ${error}`);
@@ -127,6 +127,8 @@ export default function Home() {
             </div>
           )}
 
+          <ConfirmationDialog summary={confirmation} onClose={() => setConfirmation(null)} />
+
           <StepIndicator active={showRegistrationForm} />
 
           <TeamNumberInput
@@ -165,34 +167,28 @@ export default function Home() {
                   onSelect={(venueId, slotId) => setSelectedRegular((prev) => ({ ...prev, [venueId]: slotId }))}
                 />
 
-                {/* Optional confirmation email */}
-                <div className="mt-2 space-y-3">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={wantsEmail}
-                      onChange={(e) => setWantsEmail(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                    <span className="text-slate-700">Email me a confirmation receipt</span>
+                {/* Required confirmation email */}
+                <div className="mt-2 space-y-2">
+                  <label htmlFor="confirm-email" className="block text-slate-700 font-medium">
+                    Email for confirmation receipt
                   </label>
                   <input
+                    id="confirm-email"
                     type="email"
                     inputMode="email"
+                    required
                     placeholder="coach@example.org"
                     value={confirmEmail}
                     onChange={(e) => setConfirmEmail(e.target.value)}
-                    disabled={!wantsEmail}
-                    className={`w-full rounded-lg border px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      wantsEmail ? "border-slate-300" : "border-slate-200 bg-slate-50 text-slate-400"
-                    }`}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-slate-500">Optional. We’ll send your selections to this address.</p>
+                  <p className="text-xs text-slate-500">Required. We’ll send your selections to this address.</p>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium text-lg transition-colors"
+                  disabled={!isValidEmail}
+                  className="w-full py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium text-lg transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
                   Submit Selections
                 </button>

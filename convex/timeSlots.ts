@@ -35,9 +35,22 @@ export const getAvailable = query({
       }
     }
 
+    // A league's Meet 1 rides along on its championship slot; the league is only
+    // available if both events have room.
+    const meet1ByLeague = new Map<string, (typeof result)[number]>();
+    for (const r of result) {
+      if (r.venueType !== "meet1") continue;
+      const venue = await ctx.db.get(r.venueId);
+      if (venue?.leagueId) meet1ByLeague.set(venue.leagueId, r);
+    }
+    const withMeet1 = result.map((r) => {
+      const meet1 = r.venueType === "championship" ? meet1ByLeague.get(r.venueId) : undefined;
+      return meet1 ? { ...r, meet1, isAvailable: r.isAvailable && meet1.isAvailable } : r;
+    });
+
     // Sort by venue type (regular venues first, then championship)
     // and then by venue name and day
-    return result.sort((a, b) => {
+    return withMeet1.sort((a, b) => {
       if (a.venueType !== b.venueType) {
         return a.venueType === "regular" ? -1 : 1;
       }

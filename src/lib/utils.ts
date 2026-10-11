@@ -24,3 +24,10 @@ export function toLocalTs(dateStr?: string): number {
   const d = parseLocalDate(dateStr);
   return d ? d.getTime() : Number.NaN;
 }
+
+// "Saturday · Feb 21" for a date string, or null if unparseable.
+export function formatDayDate(dateStr?: string): string | null {
+  const d = parseLocalDate(dateStr);
+  if (!d) return null;
+  return `${d.toLocaleDateString(undefined, { weekday: "long" })} · ${d.toLocaleDateString(undefined, { month: "short" })} ${d.getDate()}`;
+}

@@ -240,10 +240,11 @@ export const createSimple = mutation({
     address: v.optional(v.string()),
     location: v.optional(v.string()),
     date: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("regular"), v.literal("championship"))),
+    type: v.optional(v.union(v.literal("regular"), v.literal("championship"), v.literal("meet1"))),
+    leagueId: v.optional(v.id("venues")),
     isActive: v.optional(v.boolean()),
   },
-  handler: async (ctx, { name, address, location, date, type, isActive }) => {
+  handler: async (ctx, { name, address, location, date, type, leagueId, isActive }) => {
     // Naive check for existing by name to avoid accidental dupes
     const existing = await ctx.db
       .query("venues")
@@ -259,6 +260,7 @@ export const createSimple = mutation({
       address,
       location,
       date,
+      leagueId,
     } as any);
     return { _id: id };
   },
@@ -272,6 +274,12 @@ export const remove = mutation({
   handler: async (ctx, { id }) => {
     const venue = await ctx.db.get(id);
     if (!venue) throw new Error("Venue not found");
+
+    const linkedMeet1 = await ctx.db
+      .query("venues")
+      .filter((q) => q.eq(q.field("leagueId"), id))
+      .first();
+    if (linkedMeet1) throw new Error(`Delete "${linkedMeet1.name}" first; it is this league's Meet 1.`);
 
     // Collect all time slots for this venue
     const slots = await ctx.db
