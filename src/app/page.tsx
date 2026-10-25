@@ -2,94 +2,57 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
+import type { Day } from "../../convex/lib/schedule";
 import { useState } from "react";
 import { Header } from "./components/registration/Header";
-import { StepIndicator } from "./components/registration/StepIndicator";
 import { TeamNumberInput } from "./components/registration/TeamNumberInput";
-import { RegularVenueSelector } from "./components/registration/RegularVenueSelector";
-import { ChampionshipSelector } from "./components/registration/ChampionshipSelector";
-import { SlotsOverview } from "./components/registration/SlotsOverview";
+import { ScheduleSelector, DAY_LABEL } from "./components/registration/ScheduleSelector";
 import { RegistrationClosedCard } from "./components/registration/RegistrationClosedCard";
 import { ConfirmationDialog, type RegistrationSummary } from "./components/registration/ConfirmationDialog";
 
 export default function Home() {
   const [teamNumber, setTeamNumber] = useState("");
-  // Map of regular venueId -> selected timeSlotId
-  const [selectedRegular, setSelectedRegular] = useState<Record<string, string>>({});
-  // Selected championship timeSlotId
-  const [selectedChampionship, setSelectedChampionship] = useState<string>("");
-  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<Day | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   // Required confirmation email
   const [confirmEmail, setConfirmEmail] = useState("");
   const [confirmation, setConfirmation] = useState<RegistrationSummary | null>(null);
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(confirmEmail.trim());
 
-  const timeSlots = useQuery(api.timeSlots.getAvailable);
+  const schedules = useQuery(api.timeSlots.getSchedules);
   const registrationStatus = useQuery(api.registrations.isRegistrationOpen);
   const isValidTeam = /^\d{1,5}$/.test(teamNumber);
   const teamAvailability = useQuery(
     api.registrations.checkTeamAvailability,
     teamNumber && isValidTeam ? { teamNumber } : "skip"
   );
-  const registerSelections = useMutation(api.registrations.registerSelections);
+  const registerDay = useMutation(api.registrations.registerDay);
+  const showRegistrationForm = Boolean(isValidTeam && teamAvailability?.isAvailable && registrationStatus?.isOpen);
+  // A day can become unavailable while the page is open (filled up or closed by an admin)
+  const canSubmit = Boolean(isValidEmail && selectedDay && !schedules?.[selectedDay].unavailable && !submitting);
 
   const handleTeamNumberChange = (value: string) => {
     const sanitized = value.replace(/\D/g, "").slice(0, 5);
     setTeamNumber(sanitized);
-    setShowRegistrationForm(false);
-    setSelectedRegular({});
-    setSelectedChampionship("");
+    setSelectedDay(null);
     setConfirmEmail("");
-  };
-
-  const handleProceed = () => {
-    if (isValidTeam && teamAvailability?.isAvailable && registrationStatus?.isOpen) {
-      setShowRegistrationForm(true);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!teamNumber || !isValidEmail) return;
-
-    // Build selection payload
-    if (!timeSlots) return;
-
-    const regularSlots = timeSlots.filter((s) => s.venueType === "regular");
-    const regularVenueIds = Array.from(new Set(regularSlots.map((s) => s.venueId)));
-    const selectedRegularIds = regularVenueIds
-      .map((vid) => selectedRegular[String(vid)])
-      .filter(Boolean);
-
-    if (selectedRegularIds.length !== regularVenueIds.length) {
-      alert("Please pick one day for each league meet.");
-      return;
-    }
-    if (!selectedChampionship) {
-      alert("Please pick a League Championship");
-      return;
-    }
-
+    if (!canSubmit || !selectedDay) return;
+    setSubmitting(true);
     try {
-      const result = await registerSelections({
-        teamNumber,
-        selections: {
-          regular: selectedRegularIds as unknown as Id<"timeSlots">[],
-          championship: selectedChampionship as unknown as Id<"timeSlots">,
-        },
-        email: confirmEmail.trim(),
-      });
-
+      const result = await registerDay({ teamNumber, day: selectedDay, email: confirmEmail.trim() });
       setConfirmation(result.summary);
       // Reset form
       setTeamNumber("");
-      setSelectedRegular({});
-      setSelectedChampionship("");
-      setShowRegistrationForm(false);
+      setSelectedDay(null);
       setConfirmEmail("");
     } catch (error) {
-      alert(`Error: ${error}`);
+      alert(`Error: ${error instanceof Error ? error.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : error}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -129,13 +92,9 @@ export default function Home() {
 
           <ConfirmationDialog summary={confirmation} onClose={() => setConfirmation(null)} />
 
-          <StepIndicator active={showRegistrationForm} />
-
           <TeamNumberInput
             teamNumber={teamNumber}
             onChange={handleTeamNumberChange}
-            onContinue={handleProceed}
-            canContinue={Boolean(isValidTeam && teamAvailability?.isAvailable && registrationStatus?.isOpen)}
             availability={teamAvailability}
             isValid={isValidTeam}
           />
@@ -150,22 +109,13 @@ export default function Home() {
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-900">Step 2: Make Your Selections</h2>
-                  <p className="text-slate-600">Pick a League and a day for each league meet.</p>
+                  <h2 className="text-xl font-semibold text-slate-900">Choose Your Schedule</h2>
+                  <p className="text-slate-600">Saturday or Sunday, for the whole season.</p>
                 </div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-8">
-                <ChampionshipSelector
-                  timeSlots={timeSlots}
-                  selected={selectedChampionship}
-                  onSelect={setSelectedChampionship}
-                />
-                <RegularVenueSelector
-                  timeSlots={timeSlots}
-                  selectedRegular={selectedRegular}
-                  onSelect={(venueId, slotId) => setSelectedRegular((prev) => ({ ...prev, [venueId]: slotId }))}
-                />
+                <ScheduleSelector schedules={schedules} selected={selectedDay} onSelect={setSelectedDay} />
 
                 {/* Required confirmation email */}
                 <div className="mt-2 space-y-2">
@@ -182,21 +132,19 @@ export default function Home() {
                     onChange={(e) => setConfirmEmail(e.target.value)}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-slate-500">Required. We’ll send your selections to this address.</p>
+                  <p className="text-xs text-slate-500">Required. We’ll send your schedule to this address.</p>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={!isValidEmail}
+                  disabled={!canSubmit}
                   className="w-full py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium text-lg transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
-                  Submit Selections
+                  {submitting ? "Registering…" : selectedDay ? `Register as a ${DAY_LABEL[selectedDay]} team` : "Choose a schedule"}
                 </button>
               </form>
             </div>
           )}
-
-          {!showRegistrationForm && <SlotsOverview timeSlots={timeSlots} />}
         </div>
       </div>
     </main>

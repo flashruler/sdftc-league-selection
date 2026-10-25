@@ -31,6 +31,7 @@ export default defineSchema({
     venueId: v.id("venues"),
     timeSlotId: v.id("timeSlots"),
     registrationDate: v.number(), // timestamp
+    email: v.optional(v.string()), // confirmation email (missing on registrations from before Sat/Sun schedules)
   })
     .index("by_team_number", ["teamNumber"])
     .index("by_venue", ["venueId"])

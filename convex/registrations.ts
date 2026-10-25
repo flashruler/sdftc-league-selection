@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { loadSchedules } from "./lib/schedule";
 
 // Check if registration is currently open
 export const isRegistrationOpen = query({
@@ -78,102 +79,11 @@ export const getAll = query({
   },
 });
 
-// Get registrations for a specific time slot
-export const getByTimeSlot = query({
-  args: {
-    timeSlotId: v.id("timeSlots"),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("registrations")
-      .withIndex("by_time_slot", (q) => q.eq("timeSlotId", args.timeSlotId))
-      .collect();
-  },
-});
-
-// Register a team - simplified to only require team number
-export const register = mutation({
+// Register a team for a full Saturday or Sunday schedule: that day's slot at every league event.
+export const registerDay = mutation({
   args: {
     teamNumber: v.string(),
-    timeSlotId: v.id("timeSlots"),
-  },
-  handler: async (ctx, args) => {
-    // Check if registration is open
-    const registrationStatus = await ctx.db
-      .query("settings")
-      .withIndex("by_key", (q) => q.eq("key", "registration_open"))
-      .first();
-      
-    const deadlineSetting = await ctx.db
-      .query("settings")
-      .withIndex("by_key", (q) => q.eq("key", "registration_deadline"))
-      .first();
-    
-    const isOpen = registrationStatus?.value !== false;
-    const now = Date.now();
-    const deadline = deadlineSetting?.value as number | undefined;
-    
-    if (!isOpen || (deadline && now > deadline)) {
-      throw new Error("Registration is currently closed");
-    }
-
-    // Check if team number is already registered
-    const existingRegistration = await ctx.db
-      .query("registrations")
-      .withIndex("by_team_number", (q) => q.eq("teamNumber", args.teamNumber))
-      .first();
-    
-    if (existingRegistration) {
-      throw new Error(`Team ${args.teamNumber} is already registered`);
-    }
-
-    // Get time slot and venue info
-    const timeSlot = await ctx.db.get(args.timeSlotId);
-    if (!timeSlot || !timeSlot.isActive) {
-      throw new Error("Invalid or inactive time slot");
-    }
-
-    const venue = await ctx.db.get(timeSlot.venueId);
-    if (!venue || !venue.isActive) {
-      throw new Error("Invalid or inactive venue");
-    }
-
-    // Check capacity (computed from registrations for real-time accuracy)
-    const regs = await ctx.db
-      .query("registrations")
-      .withIndex("by_time_slot", (q) => q.eq("timeSlotId", args.timeSlotId))
-      .collect();
-    if (regs.length >= timeSlot.capacity) {
-      throw new Error(`This time slot is full (${timeSlot.capacity}/${timeSlot.capacity} teams)`);
-    }
-
-    // Create registration
-    const registrationId = await ctx.db.insert("registrations", {
-      teamNumber: args.teamNumber,
-      venueId: venue._id,
-      timeSlotId: args.timeSlotId,
-      registrationDate: Date.now(),
-    });
-
-  // No separate capacity tracking updates needed; counts derive from registrations
-
-    return {
-      registrationId,
-      message: `Team ${args.teamNumber} successfully registered for ${venue.name} - ${timeSlot.day}`,
-    };
-  },
-});
-
-// Register a team for all required selections:
-// - One day for each regular venue (Venue 1, 2, 3)
-// - One day for the League Championship (one of four)
-export const registerSelections = mutation({
-  args: {
-    teamNumber: v.string(),
-    selections: v.object({
-      regular: v.array(v.id("timeSlots")), // expected length: number of active regular venues (typically 3)
-      championship: v.id("timeSlots"),
-    }),
+    day: v.union(v.literal("saturday"), v.literal("sunday")),
     email: v.string(),
   },
   handler: async (ctx, args) => {
@@ -196,12 +106,14 @@ export const registerSelections = mutation({
       throw new Error("Registration is currently closed");
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(args.email.trim())) {
-      throw new Error("A valid email address is required");
+    if (!/^\d{1,5}$/.test(args.teamNumber)) {
+      throw new Error("A valid team number is required");
     }
 
-    // Single global timestamp for this team's submission
-    const submittedAt = now;
+    const email = args.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("A valid email address is required");
+    }
 
     // Ensure this team hasn't already registered anything (one-shot registration flow)
     const existingAny = await ctx.db
@@ -209,196 +121,53 @@ export const registerSelections = mutation({
       .withIndex("by_team_number", (q) => q.eq("teamNumber", args.teamNumber))
       .first();
     if (existingAny) {
-      throw new Error(`Team ${args.teamNumber} has already submitted selections`);
+      throw new Error(`Team ${args.teamNumber} has already registered`);
     }
 
-    // Fetch all active venues to validate selections
-    const venues = await ctx.db
-      .query("venues")
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
-
-    const regularVenues = venues.filter((v) => v.type === "regular");
-    const championshipVenue = venues.find((v) => v.type === "championship");
-
-    if (!championshipVenue) {
-      throw new Error("Championship venue is not configured");
+    // All-or-nothing: a closed or full slot at any event blocks the whole day. Mutations are
+    // transactional, so a concurrent signup that fills a slot makes this one retry and fail here.
+    const schedule = (await loadSchedules(ctx))[args.day];
+    const dayLabel = args.day === "saturday" ? "Saturday" : "Sunday";
+    if (schedule.unavailable) {
+      throw new Error(`${dayLabel} can't be selected: ${schedule.unavailable}`);
     }
 
-    // Validate we have exactly one selection per regular venue (by venue, not by day)
-    if (args.selections.regular.length !== regularVenues.length) {
-      throw new Error(
-        `You must select one day for each regular venue (${regularVenues.length} total)`
-      );
-    }
-
-    // Load the selected time slots
-    const selectedRegularSlots = await Promise.all(
-      args.selections.regular.map((id) => ctx.db.get(id))
-    );
-    const selectedChampionshipSlot = await ctx.db.get(args.selections.championship);
-
-    if (selectedRegularSlots.some((s) => !s || !s.isActive)) {
-      throw new Error("One or more selected regular venue time slots are invalid or inactive");
-    }
-    if (!selectedChampionshipSlot || !selectedChampionshipSlot.isActive) {
-      throw new Error("Selected championship time slot is invalid or inactive");
-    }
-
-    // Validate slot venue types and uniqueness by venue for regular selections
-    const regularVenueIdsFromSlots: string[] = [];
-    for (const slot of selectedRegularSlots) {
-      // slot! is safe due to earlier check
-      const venue = await ctx.db.get(slot!.venueId);
-      if (!venue || venue.type !== "regular" || !venue.isActive) {
-        throw new Error("Selected regular slot is not from an active regular venue");
-      }
-      regularVenueIdsFromSlots.push(venue._id as unknown as string);
-    }
-
-    // Ensure we have exactly one slot per distinct regular venue
-    const distinctRegularVenueIds = Array.from(new Set(regularVenueIdsFromSlots));
-    if (distinctRegularVenueIds.length !== regularVenues.length) {
-      throw new Error("Please select exactly one day for each regular venue (no duplicates)");
-    }
-
-    // Validate championship slot belongs to championship venue
-    const champVenue = await ctx.db.get(selectedChampionshipSlot.venueId);
-    if (!champVenue || champVenue.type !== "championship" || !champVenue.isActive) {
-      throw new Error("Selected championship slot must belong to an active championship venue");
-    }
-
-    // The league's Meet 1 (if configured) comes with the league
-    const meet1Venue = await ctx.db
-      .query("venues")
-      .filter((q) => q.and(q.eq(q.field("leagueId"), champVenue._id), q.eq(q.field("isActive"), true)))
-      .first();
-    const meet1Slot = meet1Venue
-      ? await ctx.db
-          .query("timeSlots")
-          .withIndex("by_venue", (q) => q.eq("venueId", meet1Venue._id))
-          .filter((q) => q.eq(q.field("isActive"), true))
-          .first()
-      : null;
-
-    // Capacity checks for all selected slots (computed from registrations)
-    const allSlots = [...selectedRegularSlots, selectedChampionshipSlot, ...(meet1Slot ? [meet1Slot] : [])];
-    for (const slot of allSlots) {
-      const regs = await ctx.db
-        .query("registrations")
-        .withIndex("by_time_slot", (q) => q.eq("timeSlotId", slot!._id))
-        .collect();
-      if (regs.length >= slot!.capacity) {
-        const v = await ctx.db.get(slot!.venueId);
-        throw new Error(
-          `${v?.name ?? "Venue"} - ${slot!.day} is full (${slot!.capacity}/${slot!.capacity} teams)`
-        );
-      }
-    }
-
-    // At this point, attempt to create registrations
     const createdIds: string[] = [];
-    try {
-      for (const slot of selectedRegularSlots) {
-        const regId = await ctx.db.insert("registrations", {
-          teamNumber: args.teamNumber,
-          venueId: slot!.venueId,
-          timeSlotId: slot!._id,
-          registrationDate: submittedAt,
-        });
-        createdIds.push(regId as unknown as string);
-      }
-
-      // Championship registration
-      const champRegId = await ctx.db.insert("registrations", {
+    for (const e of schedule.events) {
+      const slot = (await ctx.db.get(e.slotId))!;
+      const regId = await ctx.db.insert("registrations", {
         teamNumber: args.teamNumber,
-        venueId: selectedChampionshipSlot.venueId,
-        timeSlotId: selectedChampionshipSlot._id,
-        registrationDate: submittedAt,
+        venueId: slot.venueId,
+        timeSlotId: slot._id,
+        registrationDate: now,
+        email,
       });
-      createdIds.push(champRegId as unknown as string);
-
-      if (meet1Slot) {
-        const meet1RegId = await ctx.db.insert("registrations", {
-          teamNumber: args.teamNumber,
-          venueId: meet1Slot.venueId,
-          timeSlotId: meet1Slot._id,
-          registrationDate: submittedAt,
-        });
-        createdIds.push(meet1RegId as unknown as string);
-      }
-    } catch (e) {
-      throw e;
+      createdIds.push(regId as unknown as string);
     }
-
-    // Build a friendly multi-line summary with dates
-    const parseDate = (s: string | undefined) => {
-      if (!s) return null;
-      const d = new Date(s);
-      return isNaN(d.getTime()) ? null : d;
-    };
-    const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-    const normalizeDay = (day: string) => {
-      const d = (day || "").toLowerCase().trim();
-      if (d.startsWith("sun")) return "sunday";
-      if (d.startsWith("sat")) return "saturday";
-      if (d === "day 2" || d === "2") return "sunday";
-      if (d === "day 1" || d === "1") return "saturday";
-      return d;
-    };
 
     // Structured summary (for the confirmation dialog) + text lines (for the email)
-    const ymd = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : undefined);
-    const events: { title: string; location?: string; date?: string; day?: string }[] = [];
-    if (meet1Slot && meet1Venue) {
-      events.push({
-        title: "League Meet 1",
-        location: meet1Venue.location || meet1Venue.address,
-        date: ymd(parseDate(meet1Slot.date) || parseDate(meet1Venue.date)),
-        day: meet1Slot.day,
-      });
-    } else {
-      events.push({ title: "League Meet 1" }); // not scheduled yet: date TBD
-    }
-    for (const slot of selectedRegularSlots) {
-      const v = await ctx.db.get(slot!.venueId);
-      let dateForSlot = parseDate(slot!.date);
-      if (!dateForSlot) {
-        const venueBase = parseDate(v?.date);
-        if (venueBase) {
-          const d = new Date(venueBase);
-          if (normalizeDay(slot!.day) === "sunday") d.setDate(d.getDate() + 1);
-          dateForSlot = d;
-        }
-      }
-      events.push({ title: v?.name ?? "Venue", location: v?.location || v?.address, date: ymd(dateForSlot), day: slot!.day });
-    }
-    events.push({
-      title: "League Championship",
-      location: champVenue.address,
-      date: ymd(parseDate(selectedChampionshipSlot.date) || parseDate(champVenue.date)),
-      day: selectedChampionshipSlot.day,
-    });
-    events.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? "")); // TBD first
-
-    const lines: string[] = [`Team ${args.teamNumber}`, `League Selected: ${champVenue.name}`];
+    const events = schedule.events.map(({ title, location, date }) => ({ title, location, date, day: dayLabel }));
+    const formatMD = (s?: string) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? "");
+      return m ? `${Number(m[2])}/${Number(m[3])}` : "date TBD";
+    };
+    const lines: string[] = [`Team ${args.teamNumber}`, `Schedule: ${dayLabel} team`];
     for (const e of events) {
-      const d = parseDate(e.date);
-      lines.push(`${e.title} - ${e.day ?? "TBD"}` + (d ? ` (${formatMD(d)})` : ""));
+      lines.push(`${e.title} - ${dayLabel} ${formatMD(e.date)}` + (e.location ? ` @ ${e.location}` : ""));
     }
- 
-     const message = lines.join("\n");
-     // Build HTML body
-     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-     const itemsHtml = lines.map((l) => `<li>${esc(l)}</li>`).join("");
-     const html = `<!doctype html>
+
+    const message = lines.join("\n");
+    // Build HTML body
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const itemsHtml = lines.map((l) => `<li>${esc(l)}</li>`).join("");
+    const html = `<!doctype html>
       <html>
         <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#f6f7f9; padding:24px;">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px; margin:auto; background:#ffffff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
             <tr>
               <td style="padding:24px;">
                 <h2 style="margin:0 0 12px; color:#0f172a;">Registration Confirmation</h2>
-                <p style="margin:0 0 16px; color:#334155;">Thank you for submitting your selections. Below is a copy of your submission:</p>
+                <p style="margin:0 0 16px; color:#334155;">Thank you for registering. Your team is a <b>${dayLabel} team</b>: all of your league events are on ${dayLabel}s.</p>
                 <ul style="margin:0; padding-left:18px; color:#0f172a; line-height:1.5;">${itemsHtml}</ul>
                 <p style="margin:16px 0 0; color:#64748b; font-size:12px;">This is an automated message. Please keep for your records.</p>
               </td>
@@ -406,20 +175,20 @@ export const registerSelections = mutation({
           </table>
         </body>
       </html>`;
-     await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, {
-       to: args.email.trim(),
-       subject: `Registration Confirmation - Team ${args.teamNumber}`,
-       text: message,
-       html,
-     });
- 
-     return {
-       registrationIds: createdIds,
-       message,
-       summary: { teamNumber: args.teamNumber, league: champVenue.name, email: args.email.trim(), events },
-     };
-   },
- });
+    await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, {
+      to: email,
+      subject: `Registration Confirmation - Team ${args.teamNumber} (${dayLabel} team)`,
+      text: message,
+      html,
+    });
+
+    return {
+      registrationIds: createdIds,
+      message,
+      summary: { teamNumber: args.teamNumber, day: dayLabel, email, events },
+    };
+  },
+});
 
 // Admin: remove all registrations for a team number
 export const removeByTeam = mutation({

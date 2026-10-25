@@ -9,7 +9,9 @@
  */
 
 import type * as emails from "../emails.js";
+import type * as lib_schedule from "../lib/schedule.js";
 import type * as registrations from "../registrations.js";
+import type * as seasonReset from "../seasonReset.js";
 import type * as settings from "../settings.js";
 import type * as tasks from "../tasks.js";
 import type * as test from "../test.js";
@@ -24,7 +26,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   emails: typeof emails;
+  "lib/schedule": typeof lib_schedule;
   registrations: typeof registrations;
+  seasonReset: typeof seasonReset;
   settings: typeof settings;
   tasks: typeof tasks;
   test: typeof test;

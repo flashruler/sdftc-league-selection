@@ -7,7 +7,7 @@ type HeaderProps = {
 
 export function Header({
   title = "League Selection",
-  subtitle = "Team registration and venue selection portal",
+  subtitle = "Choose your team's Saturday or Sunday schedule",
 }: HeaderProps) {
   return (
     <div className="text-center mb-12">
