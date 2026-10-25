@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, MapPin } from "lucide-react";
+import { CalendarDays, CheckCircle2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,11 +11,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { parseLocalDate } from "@/lib/utils";
-import { leagueTheme } from "./LeagueEvents";
 
 export type RegistrationSummary = {
   teamNumber: string;
-  league: string;
+  day: string; // "Saturday" | "Sunday"
   email: string;
   events: { title: string; location?: string; date?: string; day?: string }[];
 };
@@ -24,17 +23,17 @@ export function ConfirmationDialog({ summary, onClose }: { summary: Registration
   return (
     <Dialog open={summary !== null} onOpenChange={(open) => !open && onClose()}>
       {summary && (
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md grid-cols-[minmax(0,1fr)]">
           <DialogHeader className="items-center text-center sm:text-center">
             <CheckCircle2 className="size-12 text-green-600" aria-hidden="true" />
             <DialogTitle className="text-2xl">You&apos;re registered!</DialogTitle>
             <DialogDescription>
-              Team {summary.teamNumber}&apos;s selections are saved. A copy was sent to{" "}
+              Team {summary.teamNumber}&apos;s schedule is saved. A copy was sent to{" "}
               <span className="font-medium text-slate-700">{summary.email}</span>.
             </DialogDescription>
           </DialogHeader>
 
-          <LeagueRow name={summary.league} />
+          <DayRow day={summary.day} />
 
           <ol className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {summary.events.map((e) => (
@@ -53,16 +52,15 @@ export function ConfirmationDialog({ summary, onClose }: { summary: Registration
   );
 }
 
-function LeagueRow({ name }: { name: string }) {
-  const { Icon, tile } = leagueTheme(name);
+function DayRow({ day }: { day: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
-      <div className={`size-10 shrink-0 rounded-lg ${tile} text-white flex items-center justify-center`}>
-        <Icon className="size-5" aria-hidden="true" />
+    <div className="flex items-center gap-3 rounded-lg bg-blue-50 p-3">
+      <div className="size-10 shrink-0 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+        <CalendarDays className="size-5" aria-hidden="true" />
       </div>
       <div>
-        <div className="text-xs text-slate-500">League</div>
-        <div className="font-semibold text-slate-900">{name}</div>
+        <div className="text-xs text-slate-500">Schedule</div>
+        <div className="font-semibold text-slate-900">{day} team</div>
       </div>
     </div>
   );

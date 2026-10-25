@@ -8,8 +8,6 @@ type Availability = {
 type TeamNumberInputProps = {
   teamNumber: string;
   onChange: (value: string) => void;
-  onContinue: () => void;
-  canContinue: boolean;
   availability: Availability;
   isValid: boolean;
 };
@@ -17,8 +15,6 @@ type TeamNumberInputProps = {
 export function TeamNumberInput({
   teamNumber,
   onChange,
-  onContinue,
-  canContinue,
   availability,
   isValid,
 }: TeamNumberInputProps) {
@@ -36,8 +32,8 @@ export function TeamNumberInput({
           </svg>
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Step 1: Enter Your Team Number</h2>
-          <p className="text-slate-600">Please enter your FTC team number to begin the registration process.</p>
+          <h2 className="text-xl font-semibold text-slate-900">Enter Your Team Number</h2>
+          <p className="text-slate-600">Please enter your FTC team number to begin registration.</p>
         </div>
       </div>
 
@@ -61,13 +57,6 @@ export function TeamNumberInput({
               aria-invalid={teamNumber ? !isValid : undefined}
               aria-describedby="teamNumberHelp"
             />
-            <button
-              onClick={onContinue}
-              disabled={!canContinue}
-              className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-orange-300 disabled:cursor-not-allowed font-medium transition-colors"
-            >
-              Continue
-            </button>
           </div>
           <p id="teamNumberHelp" className="mt-2 text-sm text-slate-500">
             Must be 4 or 5 digits.

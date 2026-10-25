@@ -1,6 +1,6 @@
 "use client";
 
-export type AdminSection = "capacity" | "venues" | "events" | "registrations";
+export type AdminSection = "registrations" | "venues" | "events";
 
 export function AdminSidebar({
   active,
@@ -10,10 +10,9 @@ export function AdminSidebar({
   onChange: (section: AdminSection) => void;
 }) {
   const items: Array<{ id: AdminSection; label: string; icon?: React.ReactNode }> = [
-    { id: "capacity", label: "Dashboard" },
+    { id: "registrations", label: "Registrations" },
     { id: "venues", label: "Venue Details" },
     { id: "events", label: "Events" },
-    { id: "registrations", label: "Registrations" },
   ];
   return (
     <aside className="hidden md:flex md:flex-col md:w-60 border-r border-slate-200 bg-white/70 backdrop-blur-sm">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { parseLocalDate } from "@/lib/utils";
+import { dayKey } from "../../../../convex/lib/schedule";
 
 export type RegistrationRow = {
   _id: string;
@@ -9,8 +9,7 @@ export type RegistrationRow = {
   venueName?: string;
   venueType?: string;
   day?: string;
-  date?: string; // time slot specific date if present (YYYY-MM-DD)
-  venueDate?: string; // base weekend date for the venue (YYYY-MM-DD)
+  email?: string;
   registrationDate: number;
 };
 
@@ -23,10 +22,8 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
           <tr className="border-b border-slate-200">
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Submitted</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Team Number</th>
-            <th className="text-left py-4 px-4 font-semibold text-slate-700">League</th>
-            <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 1 Day</th>
-            <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 2 Day</th>
-            <th className="text-left py-4 px-4 font-semibold text-slate-700">Venue 3 Day</th>
+            <th className="text-left py-4 px-4 font-semibold text-slate-700">Day</th>
+            <th className="text-left py-4 px-4 font-semibold text-slate-700">Email</th>
             {onDeleteTeam && <th className="text-left py-4 px-4 font-semibold text-slate-700">Actions</th>}
           </tr>
         </thead>
@@ -35,10 +32,8 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
             <tr key={r.teamNumber} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
               <td className="py-4 px-4 text-slate-600 whitespace-nowrap">{r.submitted}</td>
               <td className="py-4 px-4 font-medium text-slate-900">{r.teamNumber}</td>
-              <td className="py-4 px-4 text-slate-700">{r.league}</td>
-              <td className="py-4 px-4 text-slate-700">{r.venue1}</td>
-              <td className="py-4 px-4 text-slate-700">{r.venue2}</td>
-              <td className="py-4 px-4 text-slate-700">{r.venue3}</td>
+              <td className="py-4 px-4 text-slate-700">{r.day}</td>
+              <td className="py-4 px-4 text-slate-700">{r.email}</td>
               {onDeleteTeam && (
                 <td className="py-4 px-4 text-slate-700">
                   <button
@@ -53,7 +48,7 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={onDeleteTeam ? 7 : 6} className="py-8 px-4 text-center text-slate-500">
+              <td colSpan={onDeleteTeam ? 5 : 4} className="py-8 px-4 text-center text-slate-500">
                 No registrations found
               </td>
             </tr>
@@ -67,10 +62,10 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
 export function ExportCsvButton({ registrations }: { registrations: RegistrationRow[] | undefined }) {
   const rows = useMemo(() => buildCsvRows(registrations), [registrations]);
   const onExport = () => {
-    const header = ["Submitted", "Team Number", "League", "Venue 1 Day", "Venue 2 Day", "Venue 3 Day"];
+    const header = ["Submitted", "Team Number", "Day", "Email"];
     const lines = [header.join(",")];
     for (const r of rows) {
-      const row = [r.submitted, r.teamNumber, r.league, r.venue1, r.venue2, r.venue3].map((v) => csvSafe(v));
+      const row = [r.submitted, r.teamNumber, r.day, r.email].map((v) => csvSafe(v));
       lines.push(row.join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -96,18 +91,13 @@ export function ExportCsvButton({ registrations }: { registrations: Registration
   );
 }
 
-function buildCsvRows(registrations: RegistrationRow[] | undefined) {
-  if (!registrations || registrations.length === 0)
-    return [] as Array<{ submitted: string; teamNumber: string; league: string; venue1: string; venue2: string; venue3: string }>;
+type CsvRow = { submitted: string; teamNumber: string; day: string; email: string };
 
-  // Determine the three regular venues sorted by name to map into columns 1-3
-  const regularVenueNames = Array.from(
-    new Set(registrations.filter((r) => r.venueType === "regular").map((r) => r.venueName || ""))
-  )
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+// One row per team. A team's day comes from its league-event (regular venue) registrations.
+export function buildCsvRows(registrations: RegistrationRow[] | undefined): CsvRow[] {
+  if (!registrations || registrations.length === 0) return [];
 
-  const byTeam = new Map<string, { league: string; regular: Record<string, string>; submittedAt: number | null }>();
+  const byTeam = new Map<string, { day: string; email: string; submittedAt: number | null }>();
 
   // Pacific time formatter (no seconds). Removed zone signifier.
   const pacificFmt = new Intl.DateTimeFormat("en-US", {
@@ -120,56 +110,22 @@ function buildCsvRows(registrations: RegistrationRow[] | undefined) {
     hour12: true,
   });
 
-  const formatMD = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
-  const normalizeDay = (day?: string) => {
-    const d = (day || "").toLowerCase().trim();
-    if (d.startsWith("sun")) return "sunday";
-    if (d.startsWith("sat")) return "saturday";
-    if (d === "day 2" || d === "2") return "sunday";
-    if (d === "day 1" || d === "1") return "saturday";
-    return d;
-  };
-
   for (const r of registrations) {
-    const t = r.teamNumber;
-    const entry = byTeam.get(t) || { league: "", regular: {}, submittedAt: null };
+    const entry = byTeam.get(r.teamNumber) || { day: "", email: "", submittedAt: null };
     // Track earliest registrationDate for this team
     if (typeof r.registrationDate === "number") {
       entry.submittedAt = entry.submittedAt === null ? r.registrationDate : Math.min(entry.submittedAt, r.registrationDate);
     }
-    if (r.venueType === "championship") {
-      entry.league = r.venueName || "";
-    } else if (r.venueType === "regular") {
-      const venue = r.venueName || "";
-      if (venue && r.day) {
-        // Build label like "Saturday - 10/21" using slot date or venue base date
-        let label = r.day;
-        let d = parseLocalDate(r.date);
-        if (!d) {
-          const base = parseLocalDate(r.venueDate);
-          if (base) {
-            const adj = new Date(base);
-            if (normalizeDay(r.day) === "sunday") adj.setDate(adj.getDate() + 1);
-            d = adj;
-          }
-        }
-        if (d) label = `${r.day} - ${formatMD(d)}`;
-        entry.regular[venue] = label;
-      }
-    }
-    byTeam.set(t, entry);
+    const key = dayKey(r.day);
+    if (r.venueType === "regular" && (key === "saturday" || key === "sunday")) entry.day = key === "saturday" ? "Saturday" : "Sunday";
+    if (r.email) entry.email = r.email;
+    byTeam.set(r.teamNumber, entry);
   }
 
-  // Guarantee three columns: map by the first three discovered venue names or blanks
-  const firstThree = [regularVenueNames[0], regularVenueNames[1], regularVenueNames[2]];
-
-  const rows: Array<{ submitted: string; teamNumber: string; league: string; venue1: string; venue2: string; venue3: string }> = [];
-  for (const [teamNumber, { league, regular, submittedAt }] of byTeam.entries()) {
-    const venue1 = (firstThree[0] && regular[firstThree[0]]) || "";
-    const venue2 = (firstThree[1] && regular[firstThree[1]]) || "";
-    const venue3 = (firstThree[2] && regular[firstThree[2]]) || "";
+  const rows: CsvRow[] = [];
+  for (const [teamNumber, { day, email, submittedAt }] of byTeam.entries()) {
     const submitted = submittedAt ? pacificFmt.format(new Date(submittedAt)) : "";
-    rows.push({ submitted, teamNumber, league, venue1, venue2, venue3 });
+    rows.push({ submitted, teamNumber, day, email });
   }
 
   // Sort rows by team number ascending numeric-ish

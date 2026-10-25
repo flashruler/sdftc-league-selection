@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { loadSchedules } from "./lib/schedule";
 
 // Get all time slots with availability info
 export const getAvailable = query({
@@ -248,4 +249,10 @@ export const setCapacityForVenue = mutation({
     }
     return { updated };
   },
+});
+
+// Registration page: the Saturday and Sunday schedules teams choose between
+export const getSchedules = query({
+  args: {},
+  handler: async (ctx) => loadSchedules(ctx),
 });

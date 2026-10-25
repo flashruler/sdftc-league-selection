@@ -5,53 +5,41 @@ import { useState, type ReactNode } from "react";
 import { api } from "../../../../convex/_generated/api";
 import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { formatDayDate } from "@/lib/utils";
+import { DAYS, dayKey } from "../../../../convex/lib/schedule";
 
 type Venue = Doc<"venues">;
 export type AdminSlot = Doc<"timeSlots"> & { currentCount: number; isAvailable: boolean };
 
 // ---------- Shared data helpers ----------
 
-// A league = championship venue + the meet1 venue linked to it. Regular venues are the Sat/Sun league meets.
+// Events = Meet 1 … League Tournament, each with a Saturday and a Sunday slot. Championship/meet1
+// venues are from the old league-picking flow; teams no longer see them.
 function group(venues: Venue[]) {
-  const leagues = venues.filter((v) => v.type === "championship");
-  const meet1For = (leagueId: Id<"venues">) => venues.find((m) => m.type === "meet1" && m.leagueId === leagueId);
-  const meets = venues.filter((v) => v.type === "regular");
-  const unlinked = venues.filter((v) => v.type === "meet1" && !leagues.some((l) => l._id === v.leagueId));
-  return { leagues, meet1For, meets, unlinked };
+  return { events: venues.filter((v) => v.type === "regular"), legacy: venues.filter((v) => v.type !== "regular") };
 }
 
 const isWeekend = (v: Venue) => v.type === "regular";
-const dayKey = (day: string) => {
-  const d = day.toLowerCase().trim();
-  return d.startsWith("sun") || d === "day 2" ? "sunday" : d.startsWith("sat") || d === "day 1" ? "saturday" : d;
-};
 const slotsFor = (slots: AdminSlot[], venueId: Id<"venues">) =>
   slots.filter((s) => s.venueId === venueId).sort((a, b) => dayKey(a.day).localeCompare(dayKey(b.day))); // saturday before sunday
 // Weekend days carry their own date; single-day events fall back to the venue date (same rule the registration page uses).
 const dateOf = (venue: Venue, slot?: AdminSlot) => slot?.date || (isWeekend(venue) ? undefined : venue.date);
+const label = (day: string) => day[0].toUpperCase() + day.slice(1);
 
+// Mirrors loadSchedules in convex/lib/schedule.ts: a missing or closed slot at any event blocks that whole day.
 function setupIssues(venues: Venue[], slots: AdminSlot[]) {
-  const { leagues, meet1For, meets, unlinked } = group(venues);
+  const { events, legacy } = group(venues);
   const issues: string[] = [];
-  if (leagues.length === 0) issues.push("No leagues yet. Add one in Step 1.");
-  if (meets.length === 0) issues.push("No league meets yet. Add them in Step 2.");
-  for (const l of leagues) {
-    const champ = slotsFor(slots, l._id)[0];
-    const meet1 = meet1For(l._id);
-    if (!dateOf(l, champ)) issues.push(`${l.name}: championship has no date.`);
-    if (!meet1) {
-      issues.push(`${l.name}: no Meet 1 yet. Teams will see "TBD" and won't be signed up for one.`);
-      continue;
+  if (events.length === 0) issues.push("No events yet. Add Meet 1 through the League Tournament below.");
+  for (const e of events) {
+    const own = slotsFor(slots, e._id);
+    for (const day of DAYS) {
+      const s = own.find((x) => dayKey(x.day) === day);
+      if (!s) issues.push(`${e.name}: no ${label(day)} slot, so no team can pick ${label(day)}.`);
+      else if (!s.isActive) issues.push(`${e.name}: ${label(day)} signups are closed, so no team can pick ${label(day)}.`);
+      else if (!s.date) issues.push(`${e.name}: ${label(day)} has no date.`);
     }
-    const m1 = slotsFor(slots, meet1._id)[0];
-    if (!dateOf(meet1, m1)) issues.push(`${l.name}: Meet 1 has no date.`);
-    if (champ && m1 && m1.capacity < champ.capacity)
-      issues.push(`${l.name}: Meet 1 limit (${m1.capacity}) is lower than the championship (${champ.capacity}), so the league fills at ${m1.capacity} teams.`);
   }
-  for (const m of meets) {
-    for (const s of slotsFor(slots, m._id)) if (!s.date) issues.push(`${m.name}: ${s.day} has no date.`);
-  }
-  for (const u of unlinked) issues.push(`${u.name} isn't linked to a league, so no team will be signed up for it. Delete it and add Meet 1 from the league.`);
+  if (legacy.length > 0) issues.push(`${legacy.length} old league event(s) from the previous setup are still here. Delete them below.`);
   return issues;
 }
 
@@ -72,12 +60,11 @@ function HowItWorks() {
       <div className="font-semibold text-slate-900 mb-2">How team registration works</div>
       <ol className="list-decimal pl-5 space-y-1">
         <li>
-          Each team picks <b>one league</b>. That signs them up for the league&apos;s <b>Meet 1</b> and <b>Championship</b> automatically.
+          Each team picks a <b>Saturday</b> or <b>Sunday</b> schedule.
         </li>
-        <li>
-          They also pick <b>Saturday or Sunday</b> at every open <b>league meet</b>.
-        </li>
-        <li>They get a confirmation email listing every event, ordered by date.</li>
+        <li>That signs them up for that day at <b>every</b> event below, from Meet 1 through the League Tournament.</li>
+        <li>If any event&apos;s day is closed or full, teams can&apos;t pick that day.</li>
+        <li>Leagues are assigned outside this app after registration closes.</li>
       </ol>
     </div>
   );
@@ -87,7 +74,7 @@ function Checklist({ issues }: { issues: string[] }) {
   if (issues.length === 0)
     return (
       <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-        Setup looks complete. Every league has a Meet 1 and every event has a date.
+        Setup looks complete. Every event has an open, dated Saturday and Sunday.
       </div>
     );
   return (
@@ -142,7 +129,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const errorMessage = (e: unknown) => (e instanceof Error ? e.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Something went wrong");
 
-// ---------- Create form (league, league meet, Meet 1) ----------
+// ---------- Create form ----------
 
 type NewEvent = { name: string; location: string; address: string; dates: string[]; capacity: number };
 
@@ -155,7 +142,7 @@ function NewEventForm({
   submitLabel,
   onSubmit,
 }: {
-  nameLabel?: string; // omit for Meet 1, which is named after its league
+  nameLabel: string;
   namePlaceholder?: string;
   dateLabels: string[];
   defaultCapacity: number;
@@ -191,11 +178,9 @@ function NewEventForm({
         }
       }}
     >
-      {nameLabel && (
-        <Field label={nameLabel}>
-          <input name="name" required placeholder={namePlaceholder} className={inputClass} />
-        </Field>
-      )}
+      <Field label={nameLabel}>
+        <input name="name" required placeholder={namePlaceholder} className={inputClass} />
+      </Field>
       <Field label="Venue" hint="Where it's held, e.g. the school name.">
         <input name="location" placeholder="Central High School" className={inputClass} />
       </Field>
@@ -225,23 +210,12 @@ function NewEventForm({
 export function EventsTab({ venues, slots, onEditDetails }: { venues: Venue[]; slots: AdminSlot[]; onEditDetails: () => void }) {
   const createVenue = useMutation(api.venues.createSimple);
   const createSlot = useMutation(api.timeSlots.create);
-  const { leagues, meet1For, meets, unlinked } = group(venues);
+  const { events, legacy } = group(venues);
 
   const assertNewName = (name: string) => {
     if (venues.some((v) => v.name.trim().toLowerCase() === name.toLowerCase())) throw new Error(`An event named "${name}" already exists.`);
   };
 
-  const addLeague = async ({ name, location, address, dates: [date], capacity }: NewEvent) => {
-    assertNewName(name);
-    const { _id } = await createVenue({ name, type: "championship", location, address, date: date || undefined });
-    await createSlot({ venueId: _id, day: "Day 1", capacity });
-  };
-  const addMeet1 = (league: Venue) => async ({ location, address, dates: [date], capacity }: NewEvent) => {
-    const name = `${league.name} League Meet 1`;
-    assertNewName(name);
-    const { _id } = await createVenue({ name, type: "meet1", leagueId: league._id, location, address, date: date || undefined });
-    await createSlot({ venueId: _id, day: "Day 1", capacity });
-  };
   const addMeet = async ({ name, location, address, dates: [sat, sun], capacity }: NewEvent) => {
     assertNewName(name);
     const { _id } = await createVenue({ name, type: "regular", location, address });
@@ -260,79 +234,30 @@ export function EventsTab({ venues, slots, onEditDetails }: { venues: Venue[]; s
         <Checklist issues={setupIssues(venues, slots)} />
       </div>
 
-      <Section step={1} title="Leagues" description="Teams choose exactly one league. Each league is two events: a Meet 1 and a Championship.">
-        {leagues.length === 0 && <Empty>No leagues yet.</Empty>}
-        {leagues.map((league) => {
-          const meet1 = meet1For(league._id);
-          const champCapacity = slotsFor(slots, league._id)[0]?.capacity ?? 20;
-          return (
-            <div key={league._id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="font-semibold text-slate-900 text-lg mb-3">{league.name} League</div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {meet1 ? (
-                  <EventCard title="Meet 1" venue={meet1} slots={slots} onEditDetails={onEditDetails} />
-                ) : (
-                  <div className="rounded-lg border border-amber-300 bg-white p-4">
-                    <div className="font-semibold text-slate-900">Meet 1</div>
-                    <p className="text-sm text-amber-800 mb-3">Not set up yet. Teams see &quot;TBD&quot; and won&apos;t be signed up for a Meet 1.</p>
-                    <NewEventForm
-                      dateLabels={["Meet 1 date"]}
-                      defaultCapacity={champCapacity}
-                      capacityHint="Keep this at least the championship's limit, or the league fills early."
-                      submitLabel="Add Meet 1"
-                      onSubmit={addMeet1(league)}
-                    />
-                  </div>
-                )}
-                <EventCard
-                  title="Championship"
-                  venue={league}
-                  slots={slots}
-                  onEditDetails={onEditDetails}
-                  closedNote="The whole league is hidden from teams while this is closed."
-                />
-              </div>
-            </div>
-          );
-        })}
-        <AddPanel label="Add a league">
-          <NewEventForm
-            nameLabel="League name"
-            namePlaceholder="Descartes"
-            dateLabels={["Championship date"]}
-            defaultCapacity={20}
-            capacityHint="Max teams in this league."
-            submitLabel="Add league"
-            onSubmit={addLeague}
-          />
-          <p className="text-xs text-slate-500 mt-3">After adding the league, add its Meet 1 from the league&apos;s card.</p>
-        </AddPanel>
-      </Section>
-
-      <Section step={2} title="League meets" description="Teams pick Saturday or Sunday at every open league meet. Close a day to stop new signups for it.">
-        {meets.length === 0 && <Empty>No league meets yet.</Empty>}
+      <Section title="Events" description="Meet 1 through the League Tournament. Teams are signed up for their chosen day at every event here.">
+        {events.length === 0 && <Empty>No events yet.</Empty>}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {meets.map((m) => (
+          {events.map((m) => (
             <EventCard key={m._id} title={m.name} venue={m} slots={slots} onEditDetails={onEditDetails} />
           ))}
         </div>
-        <AddPanel label="Add a league meet">
+        <AddPanel label="Add an event">
           <NewEventForm
-            nameLabel="Meet name"
-            namePlaceholder="League Meet 2"
+            nameLabel="Event name"
+            namePlaceholder="League Meet 1"
             dateLabels={["Saturday date", "Sunday date"]}
             defaultCapacity={36}
             capacityHint="Max teams per day."
-            submitLabel="Add league meet"
+            submitLabel="Add event"
             onSubmit={addMeet}
           />
         </AddPanel>
       </Section>
 
-      {unlinked.length > 0 && (
-        <Section title="Meet 1s without a league" description="No team is signed up for these. Delete them, then add Meet 1 from the league's card.">
+      {legacy.length > 0 && (
+        <Section title="Old league events" description="From the previous league-picking setup. Teams don't see these and aren't signed up for them. Delete them once their registrations are cleared.">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {unlinked.map((u) => (
+            {legacy.map((u) => (
               <EventCard key={u._id} title={u.name} venue={u} slots={slots} onEditDetails={onEditDetails} />
             ))}
           </div>
@@ -456,8 +381,8 @@ function SlotRow({ label, date, slot, closedNote }: { label: string; date?: stri
 
 // ---------- Venue Details tab ----------
 
-export function VenueDetailsTab({ venues, slots, onGoToEvents }: { venues: Venue[]; slots: AdminSlot[]; onGoToEvents: () => void }) {
-  const { leagues, meet1For, meets, unlinked } = group(venues);
+export function VenueDetailsTab({ venues, slots }: { venues: Venue[]; slots: AdminSlot[] }) {
+  const { events } = group(venues);
   return (
     <div>
       <TabHeader
@@ -465,50 +390,14 @@ export function VenueDetailsTab({ venues, slots, onGoToEvents }: { venues: Venue
         subtitle="What teams see on the registration page and in their confirmation email. Add or remove events in the Events tab."
       />
 
-      <Section step={1} title="Leagues" description="Each league's Meet 1 and Championship are shown to teams together on the league's card.">
-        {leagues.length === 0 && <Empty>No leagues yet. Add them in the Events tab.</Empty>}
-        {leagues.map((league) => {
-          const meet1 = meet1For(league._id);
-          return (
-            <div key={league._id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="font-semibold text-slate-900 text-lg mb-3">{league.name} League</div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {meet1 ? (
-                  <DetailsForm title="Meet 1" venue={meet1} slots={slots} />
-                ) : (
-                  <div className="rounded-lg border border-amber-300 bg-white p-4 text-sm">
-                    <div className="font-semibold text-slate-900">Meet 1</div>
-                    <p className="text-amber-800 mb-3">Not set up yet. Teams see &quot;TBD&quot;.</p>
-                    <button onClick={onGoToEvents} className="px-3 py-2 rounded-md text-sm text-white bg-blue-600 hover:bg-blue-700">
-                      Set up Meet 1 in Events
-                    </button>
-                  </div>
-                )}
-                <DetailsForm title="Championship" venue={league} slots={slots} />
-              </div>
-            </div>
-          );
-        })}
-      </Section>
-
-      <Section step={2} title="League meets" description="Each day keeps its own date. Teams see the venue and address on the meet's card.">
-        {meets.length === 0 && <Empty>No league meets yet. Add them in the Events tab.</Empty>}
+      <Section title="Events" description="Each day keeps its own date. Teams see the event name, venue and address on their schedule.">
+        {events.length === 0 && <Empty>No events yet. Add them in the Events tab.</Empty>}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {meets.map((m) => (
+          {events.map((m) => (
             <DetailsForm key={m._id} title={m.name} venue={m} slots={slots} />
           ))}
         </div>
       </Section>
-
-      {unlinked.length > 0 && (
-        <Section title="Meet 1s without a league" description="No team is signed up for these. Remove them in the Events tab.">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {unlinked.map((u) => (
-              <DetailsForm key={u._id} title={u.name} venue={u} slots={slots} />
-            ))}
-          </div>
-        </Section>
-      )}
     </div>
   );
 }
@@ -516,7 +405,7 @@ export function VenueDetailsTab({ venues, slots, onGoToEvents }: { venues: Venue
 const NAME_HINT: Record<Venue["type"], { label: string; hint: string }> = {
   championship: { label: "League name", hint: "The league's title. Descartes, Euclid, Gauss and Turing get their own color and icon." },
   meet1: { label: "Internal name", hint: "Only admins see this. Teams see \"League Meet 1\"." },
-  regular: { label: "Meet name", hint: "Shown as the title of the meet's card." },
+  regular: { label: "Event name", hint: "Shown to teams, e.g. \"League Meet 1\" or \"League Tournament\"." },
 };
 
 function DetailsForm({ title, venue, slots }: { title: string; venue: Venue; slots: AdminSlot[] }) {
