@@ -1,4 +1,4 @@
-type EmailEvent = { title: string; location?: string; date?: string };
+type EmailEvent = { title: string; location?: string; address?: string; date?: string };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -25,7 +25,7 @@ export function renderConfirmationEmail(teamNumber: string, dayLabel: string, ev
     ...events.map((e) => {
       const d = parseDate(e.date);
       const when = d ? `${d.weekday}, ${d.month} ${d.day}, ${d.year}` : "Date TBD";
-      return `- ${e.title}: ${when}` + (e.location ? `\n  ${e.location}` : "");
+      return [`- ${e.title}: ${when}`, e.location, e.address].filter(Boolean).join("\n  ");
     }),
     "",
     "Leagues are assigned after registration closes.",
@@ -45,7 +45,7 @@ export function renderConfirmationEmail(teamNumber: string, dayLabel: string, ev
           <td valign="top" style="${border} padding:14px 0 14px 12px;">
             <div style="font-size:15px; font-weight:600; color:#0f172a;">${esc(e.title)}</div>
             <div style="font-size:13px; color:#475569; margin-top:2px;">${when}</div>
-            ${e.location ? `<div style="font-size:13px; color:#64748b; margin-top:2px;">${esc(e.location)}</div>` : ""}
+            ${[e.location, e.address].filter(Boolean).map((l) => `<div style="font-size:13px; color:#64748b; margin-top:2px;">${esc(l!)}</div>`).join("")}
           </td>
         </tr>`;
     })

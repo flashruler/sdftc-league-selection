@@ -16,7 +16,7 @@ export type RegistrationSummary = {
   teamNumber: string;
   day: string; // "Saturday" | "Sunday"
   email: string;
-  events: { title: string; location?: string; date?: string; day?: string }[];
+  events: { title: string; location?: string; address?: string; date?: string; day?: string }[];
 };
 
 export function ConfirmationDialog({ summary, onClose }: { summary: RegistrationSummary | null; onClose: () => void }) {
@@ -66,7 +66,7 @@ function DayRow({ day }: { day: string }) {
   );
 }
 
-function EventRow({ title, location, date, day }: RegistrationSummary["events"][number]) {
+function EventRow({ title, location, address, date, day }: RegistrationSummary["events"][number]) {
   const d = parseLocalDate(date);
   return (
     <li className="flex items-center gap-4 p-3">
@@ -91,6 +91,7 @@ function EventRow({ title, location, date, day }: RegistrationSummary["events"][
             <span className="truncate">{location}</span>
           </div>
         )}
+        {address && <div className="pl-4.5 text-sm text-slate-500">{address}</div>}
       </div>
     </li>
   );

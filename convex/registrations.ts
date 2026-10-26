@@ -147,7 +147,7 @@ export const registerDay = mutation({
     }
 
     // Structured summary for the confirmation dialog; the email shows the same events
-    const events = schedule.events.map(({ title, location, date }) => ({ title, location, date, day: dayLabel }));
+    const events = schedule.events.map(({ title, location, address, date }) => ({ title, location, address, date, day: dayLabel }));
     const { subject, text, html } = renderConfirmationEmail(args.teamNumber, dayLabel, events);
     await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, { to: email, subject, text, html });
 

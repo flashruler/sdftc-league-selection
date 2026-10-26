@@ -90,7 +90,7 @@ export function ScheduleSelector({
   );
 }
 
-function EventLine({ title, location, date }: { title: string; location?: string; date?: string }) {
+function EventLine({ title, location, address, date }: { title: string; location?: string; address?: string; date?: string }) {
   const d = parseLocalDate(date);
   return (
     <li className="flex items-center gap-3 py-2">
@@ -112,6 +112,7 @@ function EventLine({ title, location, date }: { title: string; location?: string
             <span className="truncate">{location}</span>
           </div>
         )}
+        {address && <div className="pl-4.5 text-slate-500">{address}</div>}
       </div>
     </li>
   );
