@@ -14,12 +14,13 @@ const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // Inline styles + tables only: email clients ignore <style> blocks and flexbox.
-export function renderConfirmationEmail(teamNumber: string, dayLabel: string, events: EmailEvent[]) {
+export function renderConfirmationEmail(teamNumber: string, dayLabel: string, events: EmailEvent[], leagueRequest?: string) {
   const subject = `Registration Confirmation - Team ${teamNumber} (${dayLabel} team)`;
 
   const text = [
     `Team ${teamNumber} is registered as a ${dayLabel} team.`,
     `All of your league events, from Meet 1 through the League Tournament, are on ${dayLabel}s.`,
+    ...(leagueRequest ? [`League request: ${leagueRequest}`] : []),
     "",
     "Your schedule:",
     ...events.map((e) => {
@@ -77,6 +78,7 @@ export function renderConfirmationEmail(teamNumber: string, dayLabel: string, ev
           <p style="margin:16px 0 0; font-size:14px; line-height:1.5; color:#334155;">
             All of your league events, from Meet 1 through the League Tournament, are on <b>${dayLabel}s</b>.
           </p>
+          ${leagueRequest ? `<p style="margin:8px 0 0; font-size:14px; line-height:1.5; color:#334155;"><b>League request:</b> ${esc(leagueRequest)}</p>` : ""}
         </td>
       </tr>
       <tr>

@@ -17,6 +17,7 @@ export type RegistrationSummary = {
   day: string; // "Saturday" | "Sunday"
   email: string;
   events: { title: string; location?: string; address?: string; date?: string; day?: string }[];
+  leagueRequest?: string;
 };
 
 export function ConfirmationDialog({ summary, onClose }: { summary: RegistrationSummary | null; onClose: () => void }) {
@@ -34,6 +35,11 @@ export function ConfirmationDialog({ summary, onClose }: { summary: Registration
           </DialogHeader>
 
           <DayRow day={summary.day} />
+          {summary.leagueRequest && (
+            <p className="text-sm text-slate-600">
+              <span className="font-medium text-slate-900">League request:</span> {summary.leagueRequest}
+            </p>
+          )}
 
           <ol className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {summary.events.map((e) => (

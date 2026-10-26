@@ -10,6 +10,7 @@ import { TeamNumberInput } from "./components/registration/TeamNumberInput";
 import { ScheduleSelector, DAY_LABEL } from "./components/registration/ScheduleSelector";
 import { RegistrationClosedCard } from "./components/registration/RegistrationClosedCard";
 import { ConfirmationDialog, type RegistrationSummary } from "./components/registration/ConfirmationDialog";
+import { LeaguePreferenceQuestion, type LeaguePreference } from "./components/registration/LeaguePreferenceQuestion";
 
 export default function Home() {
   const [teamNumber, setTeamNumber] = useState("");
@@ -17,6 +18,9 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   // Required confirmation email
   const [confirmEmail, setConfirmEmail] = useState("");
+  const [leaguePreference, setLeaguePreference] = useState<LeaguePreference | null>(null);
+  const [partnerTeams, setPartnerTeams] = useState("");
+  const leaguePreferenceAnswered = leaguePreference === "na" || (leaguePreference !== null && /\d/.test(partnerTeams));
   const [confirmation, setConfirmation] = useState<RegistrationSummary | null>(null);
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(confirmEmail.trim());
 
@@ -30,13 +34,17 @@ export default function Home() {
   const registerDay = useMutation(api.registrations.registerDay);
   const showRegistrationForm = Boolean(isValidTeam && teamAvailability?.isAvailable && registrationStatus?.isOpen);
   // A day can become unavailable while the page is open (filled up or closed by an admin)
-  const canSubmit = Boolean(isValidEmail && selectedDay && !schedules?.[selectedDay].unavailable && !submitting);
+  const canSubmit = Boolean(
+    isValidEmail && selectedDay && !schedules?.[selectedDay].unavailable && leaguePreferenceAnswered && !submitting
+  );
 
   const handleTeamNumberChange = (value: string) => {
     const sanitized = value.replace(/\D/g, "").slice(0, 5);
     setTeamNumber(sanitized);
     setSelectedDay(null);
     setConfirmEmail("");
+    setLeaguePreference(null);
+    setPartnerTeams("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,12 +52,20 @@ export default function Home() {
     if (!canSubmit || !selectedDay) return;
     setSubmitting(true);
     try {
-      const result = await registerDay({ teamNumber, day: selectedDay, email: confirmEmail.trim() });
+      const result = await registerDay({
+        teamNumber,
+        day: selectedDay,
+        email: confirmEmail.trim(),
+        leaguePreference: leaguePreference ?? undefined,
+        partnerTeams: leaguePreference === "na" ? undefined : partnerTeams,
+      });
       setConfirmation(result.summary);
       // Reset form
       setTeamNumber("");
       setSelectedDay(null);
       setConfirmEmail("");
+      setLeaguePreference(null);
+      setPartnerTeams("");
     } catch (error) {
       alert(`Error: ${error instanceof Error ? error.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : error}`);
     } finally {
@@ -136,6 +152,13 @@ export default function Home() {
 
               {showRegistrationForm && (
                 <>
+                  <LeaguePreferenceQuestion
+                    value={leaguePreference}
+                    onChange={setLeaguePreference}
+                    partnerTeams={partnerTeams}
+                    onPartnerTeamsChange={setPartnerTeams}
+                  />
+
                   {/* Required confirmation email */}
                   <div className="mt-2 space-y-2">
                     <label htmlFor="confirm-email" className="block text-slate-700 font-medium">

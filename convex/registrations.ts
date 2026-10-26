@@ -86,6 +86,9 @@ export const registerDay = mutation({
     teamNumber: v.string(),
     day: v.union(v.literal("saturday"), v.literal("sunday")),
     email: v.string(),
+    // Optional so older clients still work; the form always sends it.
+    leaguePreference: v.optional(v.union(v.literal("na"), v.literal("same"), v.literal("different"))),
+    partnerTeams: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Registration window checks
@@ -116,6 +119,20 @@ export const registerDay = mutation({
       throw new Error("A valid email address is required");
     }
 
+    const leaguePreference =
+      args.leaguePreference === "same" || args.leaguePreference === "different" ? args.leaguePreference : undefined;
+    let partnerTeams: string | undefined;
+    if (leaguePreference) {
+      const numbers = [...new Set((args.partnerTeams ?? "").match(/\d{1,5}/g) ?? [])].filter((n) => n !== args.teamNumber);
+      if (numbers.length === 0) {
+        throw new Error("List the other team numbers in your organization, or choose N/A");
+      }
+      partnerTeams = numbers.join(", ");
+    }
+    const leagueRequest = leaguePreference
+      ? `${leaguePreference === "same" ? "Same league as" : "Different league from"} ${partnerTeams}`
+      : undefined;
+
     // Ensure this team hasn't already registered anything (one-shot registration flow)
     const existingAny = await ctx.db
       .query("registrations")
@@ -142,19 +159,21 @@ export const registerDay = mutation({
         timeSlotId: slot._id,
         registrationDate: now,
         email,
+        leaguePreference,
+        partnerTeams,
       });
       createdIds.push(regId as unknown as string);
     }
 
     // Structured summary for the confirmation dialog; the email shows the same events
     const events = schedule.events.map(({ title, location, address, date }) => ({ title, location, address, date, day: dayLabel }));
-    const { subject, text, html } = renderConfirmationEmail(args.teamNumber, dayLabel, events);
+    const { subject, text, html } = renderConfirmationEmail(args.teamNumber, dayLabel, events, leagueRequest);
     await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, { to: email, subject, text, html });
 
     return {
       registrationIds: createdIds,
       message: text,
-      summary: { teamNumber: args.teamNumber, day: dayLabel, email, events },
+      summary: { teamNumber: args.teamNumber, day: dayLabel, email, events, leagueRequest },
     };
   },
 });
