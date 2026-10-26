@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FTC League Selection",
-  description: "FIRST Tech Challenge League Selection System",
+  title: "FTC Event Selection",
+  description: "FIRST Tech Challenge Event Selection System",
 };
 
 export default function RootLayout({

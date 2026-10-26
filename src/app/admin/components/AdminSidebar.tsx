@@ -33,7 +33,7 @@ export function AdminSidebar({
           );
         })}
       </nav>
-      <div className="p-4 text-xs text-slate-500">FTC League Selection</div>
+      <div className="p-4 text-xs text-slate-500">FTC Event Selection</div>
     </aside>
   );
 }

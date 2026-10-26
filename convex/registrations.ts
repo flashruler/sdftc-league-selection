@@ -2,6 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { loadSchedules } from "./lib/schedule";
+import { renderConfirmationEmail } from "./lib/confirmationEmail";
 
 // Check if registration is currently open
 export const isRegistrationOpen = query({
@@ -145,46 +146,14 @@ export const registerDay = mutation({
       createdIds.push(regId as unknown as string);
     }
 
-    // Structured summary (for the confirmation dialog) + text lines (for the email)
+    // Structured summary for the confirmation dialog; the email shows the same events
     const events = schedule.events.map(({ title, location, date }) => ({ title, location, date, day: dayLabel }));
-    const formatMD = (s?: string) => {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? "");
-      return m ? `${Number(m[2])}/${Number(m[3])}` : "date TBD";
-    };
-    const lines: string[] = [`Team ${args.teamNumber}`, `Schedule: ${dayLabel} team`];
-    for (const e of events) {
-      lines.push(`${e.title} - ${dayLabel} ${formatMD(e.date)}` + (e.location ? ` @ ${e.location}` : ""));
-    }
-
-    const message = lines.join("\n");
-    // Build HTML body
-    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const itemsHtml = lines.map((l) => `<li>${esc(l)}</li>`).join("");
-    const html = `<!doctype html>
-      <html>
-        <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#f6f7f9; padding:24px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px; margin:auto; background:#ffffff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,0.06);">
-            <tr>
-              <td style="padding:24px;">
-                <h2 style="margin:0 0 12px; color:#0f172a;">Registration Confirmation</h2>
-                <p style="margin:0 0 16px; color:#334155;">Thank you for registering. Your team is a <b>${dayLabel} team</b>: all of your league events are on ${dayLabel}s.</p>
-                <ul style="margin:0; padding-left:18px; color:#0f172a; line-height:1.5;">${itemsHtml}</ul>
-                <p style="margin:16px 0 0; color:#64748b; font-size:12px;">This is an automated message. Please keep for your records.</p>
-              </td>
-            </tr>
-          </table>
-        </body>
-      </html>`;
-    await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, {
-      to: email,
-      subject: `Registration Confirmation - Team ${args.teamNumber} (${dayLabel} team)`,
-      text: message,
-      html,
-    });
+    const { subject, text, html } = renderConfirmationEmail(args.teamNumber, dayLabel, events);
+    await ctx.scheduler.runAfter(0, internal.emails.sendConfirmation, { to: email, subject, text, html });
 
     return {
       registrationIds: createdIds,
-      message,
+      message: text,
       summary: { teamNumber: args.teamNumber, day: dayLabel, email, events },
     };
   },

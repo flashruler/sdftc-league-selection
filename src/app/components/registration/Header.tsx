@@ -6,7 +6,7 @@ type HeaderProps = {
 };
 
 export function Header({
-  title = "League Selection",
+  title = "Event Selection",
   subtitle = "Choose your team's Saturday or Sunday schedule",
 }: HeaderProps) {
   return (

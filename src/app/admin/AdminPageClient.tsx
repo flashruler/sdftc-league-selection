@@ -35,7 +35,7 @@ export default function AdminPageClient() {
           <div className="flex-1 px-4 md:px-8 py-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">FTC League Selection</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">FTC Event Selection</h1>
                 <p className="text-muted-foreground text-sm">Administrative controls and registration management</p>
               </div>
               <div className="flex items-center gap-2">
