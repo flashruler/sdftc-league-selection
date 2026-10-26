@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Day } from "../../convex/lib/schedule";
 import { useState } from "react";
+import { CalendarDays } from "lucide-react";
 import { Header } from "./components/registration/Header";
 import { TeamNumberInput } from "./components/registration/TeamNumberInput";
 import { ScheduleSelector, DAY_LABEL } from "./components/registration/ScheduleSelector";
@@ -99,52 +100,71 @@ export default function Home() {
             isValid={isValidTeam}
           />
 
-          {/* Registration Form */}
-          {showRegistrationForm && (
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-8 mb-8">
-              <div className="flex items-center gap-3 mb-6">
+          {/* Schedules are always visible so teams can see open spots before entering a number */}
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200/50 p-8 mb-8">
+            <div className="flex items-center gap-3 mb-6">
+              {showRegistrationForm ? (
                 <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                   <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">Choose Your Schedule</h2>
-                  <p className="text-slate-600">Saturday or Sunday, for the whole season.</p>
+              ) : (
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <CalendarDays className="w-5 h-5 text-orange-600" aria-hidden="true" />
                 </div>
+              )}
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  {showRegistrationForm ? "Choose Your Schedule" : "Events & Open Spots"}
+                </h2>
+                <p className="text-slate-600">
+                  {showRegistrationForm
+                    ? "Saturday or Sunday, for the whole season."
+                    : "Each team signs up for every event on either Saturday or Sunday."}
+                </p>
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-8">
-                <ScheduleSelector schedules={schedules} selected={selectedDay} onSelect={setSelectedDay} />
-
-                {/* Required confirmation email */}
-                <div className="mt-2 space-y-2">
-                  <label htmlFor="confirm-email" className="block text-slate-700 font-medium">
-                    Email for confirmation receipt
-                  </label>
-                  <input
-                    id="confirm-email"
-                    type="email"
-                    inputMode="email"
-                    required
-                    placeholder="coach@example.org"
-                    value={confirmEmail}
-                    onChange={(e) => setConfirmEmail(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-slate-500">Required. We’ll send your schedule to this address.</p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className="w-full py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium text-lg transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
-                >
-                  {submitting ? "Registering…" : selectedDay ? `Register as a ${DAY_LABEL[selectedDay]} team` : "Choose a schedule"}
-                </button>
-              </form>
             </div>
-          )}
+
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <ScheduleSelector
+                schedules={schedules}
+                selected={selectedDay}
+                onSelect={setSelectedDay}
+                readOnly={!showRegistrationForm}
+              />
+
+              {showRegistrationForm && (
+                <>
+                  {/* Required confirmation email */}
+                  <div className="mt-2 space-y-2">
+                    <label htmlFor="confirm-email" className="block text-slate-700 font-medium">
+                      Email for confirmation receipt
+                    </label>
+                    <input
+                      id="confirm-email"
+                      type="email"
+                      inputMode="email"
+                      required
+                      placeholder="coach@example.org"
+                      value={confirmEmail}
+                      onChange={(e) => setConfirmEmail(e.target.value)}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-slate-500">Required. We’ll send your schedule to this address.</p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!canSubmit}
+                    className="w-full py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium text-lg transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? "Registering…" : selectedDay ? `Register as a ${DAY_LABEL[selectedDay]} team` : "Choose a schedule"}
+                  </button>
+                </>
+              )}
+            </form>
+          </div>
         </div>
       </div>
     </main>

@@ -14,17 +14,22 @@ export function ScheduleSelector({
   schedules,
   selected,
   onSelect,
+  readOnly = false,
 }: {
   schedules: Schedules | undefined;
   selected: Day | null;
   onSelect: (day: Day) => void;
+  // Show schedules and open spots without letting anyone pick (no team number entered yet)
+  readOnly?: boolean;
 }) {
   if (!schedules) return <div className="text-slate-500">Loading schedules…</div>;
   return (
     <fieldset>
-      <legend className="font-semibold text-slate-900">Pick your schedule</legend>
+      <legend className="font-semibold text-slate-900">{readOnly ? "Saturday and Sunday schedules" : "Pick your schedule"}</legend>
       <p className="text-sm text-slate-600 mb-3">
-        All of your team&apos;s events, from Meet 1 through the League Tournament, will be on this day.
+        {readOnly
+          ? "A team on a day goes to all of that day's events, from Meet 1 through the League Tournament."
+          : "All of your team's events, from Meet 1 through the League Tournament, will be on this day."}
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {(["saturday", "sunday"] as const).map((day) => {
@@ -38,14 +43,16 @@ export function ScheduleSelector({
               key={day}
               type="button"
               aria-pressed={isSelected}
-              disabled={Boolean(unavailable)}
+              disabled={Boolean(unavailable) || readOnly}
               onClick={() => onSelect(day)}
               className={`text-left rounded-xl border-2 p-4 transition-all ${
                 unavailable
                   ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
                   : isSelected
                     ? "border-blue-600 bg-blue-50 ring-4 ring-blue-600/15"
-                    : "border-slate-200 bg-white hover:border-blue-300"
+                    : readOnly
+                      ? "border-slate-200 bg-white cursor-default"
+                      : "border-slate-200 bg-white hover:border-blue-300"
               }`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -59,7 +66,7 @@ export function ScheduleSelector({
                 </span>
                 {unavailable ? (
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Unavailable</span>
-                ) : (
+                ) : readOnly ? null : (
                   <span
                     aria-hidden="true"
                     className={`size-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-blue-600" : "border-slate-300"}`}
