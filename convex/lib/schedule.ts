@@ -15,6 +15,7 @@ export function dayKey(day?: string): string {
 export type ScheduleEvent = {
   title: string;
   location?: string;
+  address?: string;
   date?: string;
   slotId: Id<"timeSlots">;
   spotsRemaining: number;
@@ -53,7 +54,8 @@ export async function loadSchedules(ctx: QueryCtx): Promise<Record<Day, DaySched
       if (count >= slot.capacity) result[day].unavailable ??= "This day is full.";
       result[day].events.push({
         title: venue.name,
-        location: [venue.location, venue.address].filter(Boolean).join(" · ") || undefined,
+        location: venue.location || undefined,
+        address: venue.address || undefined,
         date: slot.date || venue.date,
         slotId: slot._id,
         spotsRemaining: slot.capacity - count,
