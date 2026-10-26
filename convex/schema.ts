@@ -32,6 +32,10 @@ export default defineSchema({
     timeSlotId: v.id("timeSlots"),
     registrationDate: v.number(), // timestamp
     email: v.optional(v.string()), // confirmation email (missing on registrations from before Sat/Sun schedules)
+    // Other teams from the same organization on the same day: keep them in the same league or split them up.
+    // Missing = N/A (or registered before this question existed).
+    leaguePreference: v.optional(v.union(v.literal("same"), v.literal("different"))),
+    partnerTeams: v.optional(v.string()), // comma-separated team numbers
   })
     .index("by_team_number", ["teamNumber"])
     .index("by_venue", ["venueId"])

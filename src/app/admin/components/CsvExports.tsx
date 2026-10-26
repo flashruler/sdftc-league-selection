@@ -10,6 +10,8 @@ export type RegistrationRow = {
   venueType?: string;
   day?: string;
   email?: string;
+  leaguePreference?: "same" | "different";
+  partnerTeams?: string;
   registrationDate: number;
 };
 
@@ -24,6 +26,8 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Team Number</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Day</th>
             <th className="text-left py-4 px-4 font-semibold text-slate-700">Email</th>
+            <th className="text-left py-4 px-4 font-semibold text-slate-700">League Preference</th>
+            <th className="text-left py-4 px-4 font-semibold text-slate-700">Other Org Teams</th>
             {onDeleteTeam && <th className="text-left py-4 px-4 font-semibold text-slate-700">Actions</th>}
           </tr>
         </thead>
@@ -34,6 +38,8 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
               <td className="py-4 px-4 font-medium text-slate-900">{r.teamNumber}</td>
               <td className="py-4 px-4 text-slate-700">{r.day}</td>
               <td className="py-4 px-4 text-slate-700">{r.email}</td>
+              <td className="py-4 px-4 text-slate-700">{r.leaguePreference}</td>
+              <td className="py-4 px-4 text-slate-700">{r.partnerTeams}</td>
               {onDeleteTeam && (
                 <td className="py-4 px-4 text-slate-700">
                   <button
@@ -48,7 +54,7 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={onDeleteTeam ? 5 : 4} className="py-8 px-4 text-center text-slate-500">
+              <td colSpan={onDeleteTeam ? 7 : 6} className="py-8 px-4 text-center text-slate-500">
                 No registrations found
               </td>
             </tr>
@@ -62,10 +68,10 @@ export function CsvTable({ registrations, onDeleteTeam }: { registrations: Regis
 export function ExportCsvButton({ registrations }: { registrations: RegistrationRow[] | undefined }) {
   const rows = useMemo(() => buildCsvRows(registrations), [registrations]);
   const onExport = () => {
-    const header = ["Submitted", "Team Number", "Day", "Email"];
+    const header = ["Submitted", "Team Number", "Day", "Email", "League Preference", "Other Org Teams"];
     const lines = [header.join(",")];
     for (const r of rows) {
-      const row = [r.submitted, r.teamNumber, r.day, r.email].map((v) => csvSafe(v));
+      const row = [r.submitted, r.teamNumber, r.day, r.email, r.leaguePreference, r.partnerTeams].map((v) => csvSafe(v));
       lines.push(row.join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -91,13 +97,18 @@ export function ExportCsvButton({ registrations }: { registrations: Registration
   );
 }
 
-type CsvRow = { submitted: string; teamNumber: string; day: string; email: string };
+type CsvRow = { submitted: string; teamNumber: string; day: string; email: string; leaguePreference: string; partnerTeams: string };
+
+const PREFERENCE_LABEL = { same: "Same league", different: "Different leagues" } as const;
 
 // One row per team. A team's day comes from its league-event (regular venue) registrations.
 export function buildCsvRows(registrations: RegistrationRow[] | undefined): CsvRow[] {
   if (!registrations || registrations.length === 0) return [];
 
-  const byTeam = new Map<string, { day: string; email: string; submittedAt: number | null }>();
+  const byTeam = new Map<
+    string,
+    { day: string; email: string; leaguePreference: string; partnerTeams: string; submittedAt: number | null }
+  >();
 
   // Pacific time formatter (no seconds). Removed zone signifier.
   const pacificFmt = new Intl.DateTimeFormat("en-US", {
@@ -111,7 +122,7 @@ export function buildCsvRows(registrations: RegistrationRow[] | undefined): CsvR
   });
 
   for (const r of registrations) {
-    const entry = byTeam.get(r.teamNumber) || { day: "", email: "", submittedAt: null };
+    const entry = byTeam.get(r.teamNumber) || { day: "", email: "", leaguePreference: "N/A", partnerTeams: "", submittedAt: null };
     // Track earliest registrationDate for this team
     if (typeof r.registrationDate === "number") {
       entry.submittedAt = entry.submittedAt === null ? r.registrationDate : Math.min(entry.submittedAt, r.registrationDate);
@@ -119,13 +130,15 @@ export function buildCsvRows(registrations: RegistrationRow[] | undefined): CsvR
     const key = dayKey(r.day);
     if (r.venueType === "regular" && (key === "saturday" || key === "sunday")) entry.day = key === "saturday" ? "Saturday" : "Sunday";
     if (r.email) entry.email = r.email;
+    if (r.leaguePreference) entry.leaguePreference = PREFERENCE_LABEL[r.leaguePreference];
+    if (r.partnerTeams) entry.partnerTeams = r.partnerTeams;
     byTeam.set(r.teamNumber, entry);
   }
 
   const rows: CsvRow[] = [];
-  for (const [teamNumber, { day, email, submittedAt }] of byTeam.entries()) {
+  for (const [teamNumber, { day, email, leaguePreference, partnerTeams, submittedAt }] of byTeam.entries()) {
     const submitted = submittedAt ? pacificFmt.format(new Date(submittedAt)) : "";
-    rows.push({ submitted, teamNumber, day, email });
+    rows.push({ submitted, teamNumber, day, email, leaguePreference, partnerTeams });
   }
 
   // Sort rows by team number ascending numeric-ish
