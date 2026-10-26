@@ -18,6 +18,7 @@ export type ScheduleEvent = {
   date?: string;
   slotId: Id<"timeSlots">;
   spotsRemaining: number;
+  capacity: number;
 };
 
 // unavailable: why a team can't pick this day right now (closed, full, or not set up)
@@ -56,6 +57,7 @@ export async function loadSchedules(ctx: QueryCtx): Promise<Record<Day, DaySched
         date: slot.date || venue.date,
         slotId: slot._id,
         spotsRemaining: slot.capacity - count,
+        capacity: slot.capacity,
       });
     }
   }

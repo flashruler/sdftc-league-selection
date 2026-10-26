@@ -30,6 +30,9 @@ export function ScheduleSelector({
         {(["saturday", "sunday"] as const).map((day) => {
           const { events, unavailable } = schedules[day];
           const isSelected = selected === day;
+          // A day's teams attend every event, so the tightest event limit caps the day.
+          const capacity = events.length ? Math.min(...events.map((e) => e.capacity)) : 0;
+          const filled = Math.max(0, ...events.map((e) => e.capacity - e.spotsRemaining));
           return (
             <button
               key={day}
@@ -46,7 +49,14 @@ export function ScheduleSelector({
               }`}
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="text-lg font-bold text-slate-900">{DAY_LABEL[day]} schedule</span>
+                <span>
+                  <span className="block text-lg font-bold text-slate-900">{DAY_LABEL[day]} schedule</span>
+                  {events.length > 0 && (
+                    <span className="block text-sm text-slate-600">
+                      {Math.min(filled, capacity)}/{capacity} teams
+                    </span>
+                  )}
+                </span>
                 {unavailable ? (
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Unavailable</span>
                 ) : (
